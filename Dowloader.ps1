@@ -1,6 +1,6 @@
 # ==========================================================
-#   KINTSUGI SMART DOWNLOADER (AUTO-FIX EDITION)
-#   Fitur: Index Sync, Deep Scan + Auto Redownload
+#   KINTSUGI SMART DOWNLOADER (AUTO-FIX + STATS EDITION)
+#   Fitur: Index Sync, Deep Scan, Auto-Redownload, Full Stats
 # ==========================================================
 
 # --- 1. KONFIGURASI ---
@@ -13,9 +13,11 @@ $YtDlp        = ".\yt-dlp.exe"
 
 # Cek keberadaan yt-dlp
 if (-not (Test-Path $YtDlp)) {
-    if (Get-Command "yt-dlp" -ErrorAction SilentlyContinue) { $YtDlp = "yt-dlp" } else { 
+    if (Get-Command "yt-dlp" -ErrorAction SilentlyContinue) { 
+        $YtDlp = "yt-dlp" 
+    } else { 
         Write-Host " [ERROR] yt-dlp.exe tidak ditemukan!" -ForegroundColor Red
-        Write-Host " Silakan install: pip install yt-dlp atau download dari https://github.com/yt-dlp/yt-dlp" -ForegroundColor Yellow
+        Write-Host " Silakan taruh yt-dlp.exe di folder ini." -ForegroundColor Yellow
         exit 1
     }
 }
@@ -26,7 +28,7 @@ if (-not (Test-Path $FFmpegExe)) {
     if (Get-Command "ffmpeg" -ErrorAction SilentlyContinue) { $FFmpegExe = "ffmpeg" } else { $FFmpegExe = $null }
 }
 
-# Pastikan folder ada
+# Pastikan folder output ada
 if (!(Test-Path $OutputFolder)) { New-Item -ItemType Directory -Path $OutputFolder | Out-Null }
 
 Clear-Host
@@ -105,52 +107,52 @@ if ($UserChoice -eq 'Y' -or $UserChoice -eq 'y') {
         Write-Host "`n>>> [CHECK] Memulai 'Deep Scan' integritas file..." -ForegroundColor Magenta
         
         $AllFiles = Get-ChildItem -Path $OutputFolder -Filter "*.opus"
-        $TotalFiles = @($AllFiles).Count
+        # Gunakan @() agar tetap terhitung array meski cuma 1 file
+        $TotalFiles = @($AllFiles).Count 
         $ScanCount = 0
         $BadFiles = 0
 
         if ($TotalFiles -eq 0) {
             Write-Host " [INFO] Tidak ada file .opus ditemukan. Deep Scan dilewati." -ForegroundColor Yellow
         } else {
-        foreach ($file in $AllFiles) {
-            $ScanCount++
-            Write-Progress -Activity "Deep Scan Audio" -Status "Cek [$ScanCount / $TotalFiles]: $($file.Name)" -PercentComplete (($ScanCount / $TotalFiles) * 100)
+            foreach ($file in $AllFiles) {
+                $ScanCount++
+                Write-Progress -Activity "Deep Scan Audio" -Status "Cek [$ScanCount / $TotalFiles]: $($file.Name)" -PercentComplete (($ScanCount / $TotalFiles) * 100)
 
-            # FFmpeg Silent Check
-            $CheckCmd = Start-Process -FilePath $FFmpegExe -ArgumentList "-v error -i `"$($file.FullName)`" -f null -" -Wait -NoNewWindow -PassThru
-            
-            if ($CheckCmd.ExitCode -ne 0) {
-                Write-Host "`n [RUSAK] File korup terdeteksi: $($file.Name)" -ForegroundColor Red
+                # FFmpeg Silent Check
+                $CheckCmd = Start-Process -FilePath $FFmpegExe -ArgumentList "-v error -i `"$($file.FullName)`" -f null -" -Wait -NoNewWindow -PassThru
                 
-                # 1. Hapus File Fisik
-                Remove-Item $file.FullName -Force
-
-                # 2. Hapus ID dari Archive (FIX LOGIC)
-                if ($file.Name -match "^(\d{3,4})\s") {
-                    [int]$BadIndex = $matches[1]
-                    # Cari ID YouTube berdasarkan nomor urut file
-                    $BadVideoData = $PlaylistData | Where-Object { [int]$_.playlist_index -eq $BadIndex }
+                if ($CheckCmd.ExitCode -ne 0) {
+                    Write-Host "`n [RUSAK] File korup terdeteksi: $($file.Name)" -ForegroundColor Red
                     
-                    if ($BadVideoData) {
-                        $BadID = $BadVideoData.id
-                        # Baca archive, buang baris yang mengandung ID ini
-                        if (Test-Path $ArchiveFile) {
-                            $CleanArchive = Get-Content $ArchiveFile | Where-Object { $_ -notmatch "youtube $BadID" }
-                            $CleanArchive | Set-Content $ArchiveFile
-                            Write-Host "         -> ID dihapus dari Archive (Siap download ulang)." -ForegroundColor Yellow
+                    # 1. Hapus File Fisik
+                    Remove-Item $file.FullName -Force
+
+                    # 2. Hapus ID dari Archive agar didownload ulang
+                    if ($file.Name -match "^(\d{3,4})\s") {
+                        [int]$BadIndex = $matches[1]
+                        # Cari ID YouTube berdasarkan nomor urut file
+                        $BadVideoData = $PlaylistData | Where-Object { [int]$_.playlist_index -eq $BadIndex }
+                        
+                        if ($BadVideoData) {
+                            $BadID = $BadVideoData.id
+                            if (Test-Path $ArchiveFile) {
+                                $CleanArchive = Get-Content $ArchiveFile | Where-Object { $_ -notmatch "youtube $BadID" }
+                                $CleanArchive | Set-Content $ArchiveFile
+                                Write-Host "         -> ID dihapus dari Archive (Siap download ulang)." -ForegroundColor Yellow
+                            }
                         }
                     }
+                    $BadFiles++
                 }
-                $BadFiles++
             }
-        }
-        Write-Progress -Activity "Deep Scan Audio" -Completed
-        
-        if ($BadFiles -gt 0) {
-            Write-Host " [INFO] $BadFiles file rusak telah dihapus & direset dari archive." -ForegroundColor Yellow
-        } else {
-            Write-Host " [OK] Semua file sehat." -ForegroundColor Green
-        }
+            Write-Progress -Activity "Deep Scan Audio" -Completed
+            
+            if ($BadFiles -gt 0) {
+                Write-Host " [INFO] $BadFiles file rusak telah dihapus & direset dari archive." -ForegroundColor Yellow
+            } else {
+                Write-Host " [OK] Semua file sehat." -ForegroundColor Green
+            }
         }
     } else {
         Write-Host "`n [ERROR] Tidak bisa Scan. File ffmpeg.exe tidak ditemukan!" -ForegroundColor Red
@@ -161,7 +163,6 @@ if ($UserChoice -eq 'Y' -or $UserChoice -eq 'y') {
 Write-Host "----------------------------------------------------------`n" -ForegroundColor DarkGray
 
 # --- 4. EKSEKUSI DOWNLOAD (ESTAFET 3 RONDE) ---
-# Skrip download ini otomatis akan mengambil lagu yang tadi dihapus di tahap Deep Scan
 $BaseArgs = "-P ""$OutputFolder"" -x --audio-format opus --audio-quality 0 --embed-thumbnail --embed-metadata --parse-metadata ""playlist_title:%(album)s"" --windows-filenames --trim-filenames 160 -o ""%(playlist_index)s %(artist)s - %(title)s.%(ext)s"" --download-archive ""$ArchiveFile"" --ignore-errors --no-overwrites --continue"
 
 function Run-YtDlp ($ClientName, $ClientArg) {
@@ -178,7 +179,9 @@ $ErrorCheck = if (Test-Path $ErrorFile) { (Get-Content $ErrorFile).Count } else 
 
 if ($ErrorCheck -gt 0) {
     Write-Host "`n>>> [RETRY] Mencoba metode cadangan..." -ForegroundColor Yellow
+    # Reset log error agar yang tertampil nanti hanya error final
     if (Test-Path $ErrorFile) { Clear-Content $ErrorFile }
+    
     # Ronde 2 & 3
     Run-YtDlp "TV Embedded" "tv_embedded"
     Run-YtDlp "Android Standar" "android"
@@ -218,7 +221,7 @@ if ($FailedCount -gt 0) {
     Write-Host "`n[SEMPURNA] Semua lagu berhasil diamankan!" -ForegroundColor Green
 }
 
-# --- 6. STATISTIK ---
+# --- 6. STATISTIK SESI ---
 if (Test-Path $ArchiveFile) { $CountEnd = @(Get-Content $ArchiveFile).Count } else { $CountEnd = 0 }
 $NewDownloads = $CountEnd - $CountStart
 
@@ -227,6 +230,14 @@ Write-Host "   STATISTIK SESI" -ForegroundColor Cyan
 Write-Host " + Total File Awal (Sync)   : $CountStart" -ForegroundColor Gray
 Write-Host " + Lagu Baru Didownload     : $NewDownloads" -ForegroundColor Green
 Write-Host " + Total Koleksi Akhir      : $CountEnd" -ForegroundColor Cyan
+
+# [REQUEST ANDA] Menampilkan jumlah error di statistik akhir
+if ($FailedCount -gt 0) {
+    Write-Host " + Gagal Download           : $FailedCount (Lihat Laporan_Gagal.txt)" -ForegroundColor Red
+} else {
+    Write-Host " + Gagal Download           : 0" -ForegroundColor Green
+}
+
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Tekan Enter untuk menutup..." -ForegroundColor DarkGray
 Read-Host
