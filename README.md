@@ -1,8 +1,8 @@
 # KINTSUGI-SMART-DOWNLOADER
 
-**Ultimate YouTube Playlist Downloader with Index Sync, FFmpeg Integrity Check & Relay Download**
+**YouTube Playlist Downloader with Archive Trust, FFmpeg Integrity Check & Smart Fallback (v8.0 LITE MODE)**
 
-A powerful PowerShell script that downloads YouTube playlists as audio files (OPUS format) with intelligent synchronization, corruption detection, and multi-method fallback support.
+A lightweight PowerShell script that downloads YouTube playlists as audio files (OPUS format) with archive-based duplicate prevention, corruption detection, and intelligent client fallback.
 
 > 🎵 **Perfect for**: Music archiving, playlist backups, offline listening, audio collection management
 
@@ -10,13 +10,13 @@ A powerful PowerShell script that downloads YouTube playlists as audio files (OP
 
 ## 📋 Overview
 
-The `Downloader.ps1` script automates YouTube playlist downloads with these advanced features:
+The `Downloader.ps1` script automates YouTube playlist downloads with these features:
 
-- **🔄 Index Synchronization**: Automatically matches existing files with playlist entries to prevent duplicates
-- **🔍 FFmpeg Deep Check**: Validates audio file integrity and removes corrupted files
-- **♻️ Relay Download (3-Round Fallback)**: Uses multiple YouTube client methods to maximize success rate
+- **📦 Archive Trust Mode**: Uses local `archive.txt` to prevent duplicate downloads
+- **🔍 FFmpeg Deep Scan**: Validates audio file integrity and automatically removes corrupted files
+- **♻️ Intelligent Fallback**: Primary Android VR client with Web Browser fallback for reliability
 - **⏸️ Smart Resume**: Continues interrupted downloads without re-downloading existing files
-- **📊 Detailed Reporting**: Generates comprehensive logs of failed downloads with reasons and links
+- **📊 Session Statistics**: Displays download count and collection size
 
 ---
 
@@ -139,22 +139,24 @@ cd KINTSUGI-SMART-DOWNLOADER
 Your folder should look like this:
 ```
 KINTSUGI-SMART-DOWNLOADER/
-├── Downloader.ps1          ← Main script
-├── yt-dlp.exe              ← Place here (or install via pip)
-├── ffmpeg.exe              ← Place here (optional)
+├── Downloader.ps1          ← Main script (v8.0 LITE MODE)
+├── yt-dlp.exe              ← Required (install via pip or download)
+├── ffmpeg.exe              ← Optional (for Deep Scan feature)
 └── README.md               ← This file
 ```
+
+**Note**: The script is now in **LITE MODE** which uses archive-based deduplication (no full playlist sync).
 
 ### Step 3: Configure the Script
 
 1. Open `Downloader.ps1` in a text editor (Notepad or VS Code)
-2. Find lines 6-9 and modify:
+2. Find lines 11-15 and modify:
 
 ```powershell
-# Line 6: Where files will be saved
+# Line 11: Where files will be saved
 $OutputFolder = "C:\Users\it\Music\Kintsugi"
 
-# Line 10: Your YouTube playlist URL
+# Line 15: Your YouTube playlist URL
 $URL = "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 ```
 
@@ -174,55 +176,47 @@ $URL = "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
    ```powershell
    .\Downloader.ps1
    ```
+4. When prompted, choose whether to perform Deep Scan:
+   - Type `Y` to validate and remove corrupted files
+   - Type `N` to skip straight to downloading
 
 ---
 
-## 📊 How It Works (6 Phases)
+## 📊 How It Works (4 Phases)
 
 ### 🔧 Phase 1: Configuration
+- Loads configuration settings
+- Checks for `yt-dlp.exe` and `ffmpeg.exe` availability
 - Creates output folder if it doesn't exist
-- Checks for FFmpeg availability
-- Displays system status
+- Displays system ready message
 
-### 🔄 Phase 2: Synchronization (Index Matching)
-- Fetches playlist metadata from YouTube
-- Scans existing `.opus` files in output folder
-- Compares playlist index numbers with local files
-- Updates `archive.txt` with verified downloads
-- **Result**: Prevents duplicate downloads
+### 📦 Phase 2: Archive Mode
+- Trusts local `archive.txt` file to prevent duplicate downloads
+- No YouTube playlist metadata sync required
+- Faster startup and less API calls
+- Archive file automatically created/updated during downloads
 
-### 🔍 Phase 3: Maintenance (FFmpeg Deep Check)
-- Scans all existing `.opus` files
+### 🔍 Phase 3: Maintenance (FFmpeg Deep Scan) - Optional
+- **User prompted**: "Lakukan Deep Scan sekarang? (Y/N)"
+- If YES: Scans all existing `.opus` files for corruption
 - Uses FFmpeg to validate audio integrity
 - **Automatically removes** corrupted files
-- Marks removed files for re-download
 - Shows live progress bar
+- If NO: Skips maintenance and proceeds to download
 
-### 📥 Phase 4: Download Execution (Relay 3-Round)
-**Round 1 (Primary):**
-- Uses Android VR client (most stable)
+### 📥 Phase 4: Download Execution (Smart Fallback)
+**Primary Client:**
+- Uses **Android VR** client (most stable and fastest)
 
-**If Failures Detected:**
+**If Errors Detected:**
+- Automatically switches to **Web Browser** client
+- Both methods support resume on interruption
+- No duplicate downloads (archive-based prevention)
 
-**Round 2 (Fallback 1):**
-- Tries TV Embedded client
-
-**Round 3 (Fallback 2):**
-- Uses standard Android client
-
-- All rounds support **resume on interruption**
-- No duplicate downloads
-
-### 📋 Phase 5: Final Analysis & Report
-- Compares downloaded files with playlist
-- Generates `Laporan_Gagal.txt` if any failed
-- Lists failed tracks with YouTube links for manual review
-
-### 📊 Phase 6: Session Statistics
+### 📊 Phase 5: Session Statistics
 ```
-Total File Count (Start)    : X
-New Downloads This Session  : Y
-Total Collection (End)      : Z
+Total Koleksi Lokal      : X (Total files in collection)
+Lagu Baru Didownload     : Y (New downloads this session)
 ```
 
 ---
@@ -317,10 +311,12 @@ foreach ($playlist in $playlists) {
 
 ## 📝 Important Notes
 
-- ✅ **No Duplicates**: Script automatically skips already-downloaded videos
-- ✅ **Corruption Detection**: Files are validated before use
-- ✅ **Multi-Method Fallback**: 3 different YouTube clients for reliability
-- ✅ **Resume Support**: Interruptions don't cause re-downloads
+- ✅ **Archive-Based Deduplication**: Uses local `archive.txt` to prevent re-downloads (faster than sync)
+- ✅ **Corruption Detection**: FFmpeg Deep Scan option validates and removes corrupted files
+- ✅ **Intelligent Fallback**: Android VR + Web Browser clients for maximum reliability
+- ✅ **Resume Support**: Interruptions don't cause re-downloads (archive prevents duplicates)
+- ✅ **Optional Maintenance**: Deep Scan is optional - script works fine without FFmpeg
+- ⚠️ **LITE MODE**: No full playlist synchronization (uses archive only)
 - ⚠️ **First Run**: May take longer depending on playlist size
 - ⚠️ **Respect Copyright**: Ensure you have rights to download content
 
@@ -351,4 +347,4 @@ Found a bug? Have a suggestion?
 ---
 
 **Last Updated:** January 2026
-**Version:** Ultimate Edition
+**Version:** v8.0 LITE MODE
