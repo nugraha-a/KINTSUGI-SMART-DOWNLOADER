@@ -11,6 +11,15 @@ $ReportFile   = "$OutputFolder\Laporan_Gagal.txt"
 $URL          = "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wvhzmzj7ciDDRC99alMEYiC"
 $YtDlp        = ".\yt-dlp.exe"
 
+# Cek keberadaan yt-dlp
+if (-not (Test-Path $YtDlp)) {
+    if (Get-Command "yt-dlp" -ErrorAction SilentlyContinue) { $YtDlp = "yt-dlp" } else { 
+        Write-Host " [ERROR] yt-dlp.exe tidak ditemukan!" -ForegroundColor Red
+        Write-Host " Silakan install: pip install yt-dlp atau download dari https://github.com/yt-dlp/yt-dlp" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
 # Cek keberadaan FFmpeg
 $FFmpegExe = ".\ffmpeg.exe"
 if (-not (Test-Path $FFmpegExe)) {
@@ -96,10 +105,13 @@ if ($UserChoice -eq 'Y' -or $UserChoice -eq 'y') {
         Write-Host "`n>>> [CHECK] Memulai 'Deep Scan' integritas file..." -ForegroundColor Magenta
         
         $AllFiles = Get-ChildItem -Path $OutputFolder -Filter "*.opus"
-        $TotalFiles = $AllFiles.Count
+        $TotalFiles = @($AllFiles).Count
         $ScanCount = 0
         $BadFiles = 0
 
+        if ($TotalFiles -eq 0) {
+            Write-Host " [INFO] Tidak ada file .opus ditemukan. Deep Scan dilewati." -ForegroundColor Yellow
+        } else {
         foreach ($file in $AllFiles) {
             $ScanCount++
             Write-Progress -Activity "Deep Scan Audio" -Status "Cek [$ScanCount / $TotalFiles]: $($file.Name)" -PercentComplete (($ScanCount / $TotalFiles) * 100)
@@ -139,6 +151,7 @@ if ($UserChoice -eq 'Y' -or $UserChoice -eq 'y') {
         } else {
             Write-Host " [OK] Semua file sehat." -ForegroundColor Green
         }
+        }
     } else {
         Write-Host "`n [ERROR] Tidak bisa Scan. File ffmpeg.exe tidak ditemukan!" -ForegroundColor Red
     }
@@ -165,6 +178,7 @@ $ErrorCheck = if (Test-Path $ErrorFile) { (Get-Content $ErrorFile).Count } else 
 
 if ($ErrorCheck -gt 0) {
     Write-Host "`n>>> [RETRY] Mencoba metode cadangan..." -ForegroundColor Yellow
+    if (Test-Path $ErrorFile) { Clear-Content $ErrorFile }
     # Ronde 2 & 3
     Run-YtDlp "TV Embedded" "tv_embedded"
     Run-YtDlp "Android Standar" "android"
@@ -205,7 +219,7 @@ if ($FailedCount -gt 0) {
 }
 
 # --- 6. STATISTIK ---
-if (Test-Path $ArchiveFile) { $CountEnd = (Get-Content $ArchiveFile).Count } else { $CountEnd = 0 }
+if (Test-Path $ArchiveFile) { $CountEnd = @(Get-Content $ArchiveFile).Count } else { $CountEnd = 0 }
 $NewDownloads = $CountEnd - $CountStart
 
 Write-Host "`n==========================================================" -ForegroundColor Cyan
