@@ -1,8 +1,8 @@
 # KINTSUGI-SMART-DOWNLOADER
 
-**YouTube Playlist Downloader with Archive Trust, FFmpeg Integrity Check & Smart Fallback (v8.0 LITE MODE)**
+**YouTube Playlist Downloader with Multi-Threaded Downloads, Dynamic Quality FFmpeg Conversion & Smart Sync (v67.0 SMART QUALITY EDITION)**
 
-A lightweight PowerShell script that downloads YouTube playlists as audio files (OPUS format) with archive-based duplicate prevention, corruption detection, and intelligent client fallback.
+A Node.js-powered async downloader that synchronizes YouTube playlists with intelligent audio quality optimization, multi-threaded processing, and comprehensive file management.
 
 > 🎵 **Perfect for**: Music archiving, playlist backups, offline listening, audio collection management
 
@@ -10,13 +10,25 @@ A lightweight PowerShell script that downloads YouTube playlists as audio files 
 
 ## 📋 Overview
 
-The `Downloader.ps1` script automates YouTube playlist downloads with these features:
+The `kintsugi_async.js` script automates YouTube playlist downloads with these advanced features:
 
-- **📦 Archive Trust Mode**: Uses local `archive.txt` to prevent duplicate downloads
-- **🔍 FFmpeg Deep Scan**: Validates audio file integrity and automatically removes corrupted files
-- **♻️ Intelligent Fallback**: Primary Android VR client with Web Browser fallback for reliability
-- **⏸️ Smart Resume**: Continues interrupted downloads without re-downloading existing files
-- **📊 Session Statistics**: Displays download count and collection size
+- **🚀 Multi-Threaded Downloads**: Concurrent yt-dlp workers for faster playlist processing
+- **🎛️ Dynamic Quality**: Intelligent bitrate selection based on source audio analysis
+- **🔄 Playlist Sync**: Full synchronization with YouTube playlist (new, deleted, private video detection)
+- **📦 Archive Management**: Database-driven tracking with orphan/deleted video handling
+- **🔧 FFmpeg Conversion**: Multi-threaded audio conversion with dynamic quality optimization
+- **📊 Session Logging**: Timestamped logs with granular file/activity tracking
+- **⏸️ Smart Resume**: Continues interrupted downloads without duplicates
+
+---
+
+## 🆕 What's New in v67.0
+
+- **SMART QUALITY EDITION**: Dynamic bitrate selection based on source file analysis
+- **Multi-threaded FFmpeg**: Parallel audio conversion utilizing all CPU cores
+- **Interactive Menu**: User-friendly console menu for different operations
+- **Enhanced Archive System**: Better handling of orphaned and unavailable videos
+- **Data Directory Structure**: Organized `data/` folder for database, archive, and logs
 
 ---
 
@@ -24,22 +36,22 @@ The `Downloader.ps1` script automates YouTube playlist downloads with these feat
 
 ### What You Need to Install
 
-#### 1️⃣ **Python 3.8 or Higher**
+#### 1️⃣ **Node.js 16.x or Higher**
 
-**Why?** Python is needed to run `pip` and install `yt-dlp` package.
+**Why?** Node.js is required to run the async JavaScript downloader script.
 
 **Installation Steps:**
-1. Visit: https://www.python.org/downloads/
-2. Click **"Download Python 3.x.x"** (latest version)
-3. Run the installer (`.exe` file)
-4. ⚠️ **IMPORTANT**: Check ✅ **"Add Python to PATH"** during installation
-5. Click "Install Now" and wait for completion
+1. Visit: https://nodejs.org/
+2. Click **"Download LTS"** (recommended version)
+3. Run the installer (`.msi` file)
+4. Follow installation wizard (default options are fine)
+5. Node.js will be added to PATH automatically
 
 **Verify Installation:**
 ```powershell
-# Open PowerShell and run:
-python --version
-pip --version
+# Open PowerShell/CMD and run:
+node --version
+npm --version
 ```
 
 ---
@@ -48,17 +60,10 @@ pip --version
 
 **Why?** Extracts playlist metadata and downloads audio from YouTube.
 
-**Installation Method A: Using pip (RECOMMENDED)**
-```powershell
-# Open PowerShell as Administrator and run:
-pip install yt-dlp
-```
-
-**Installation Method B: Download Binary Directly**
-1. Go to: https://github.com/yt-dlp/yt-dlp
-2. Look for **Releases** section (right side of page)
-3. Download latest **`yt-dlp.exe`** file
-4. Move `yt-dlp.exe` to the same folder as `Downloader.ps1`
+**Installation: Download Binary (RECOMMENDED)**
+1. Go to: https://github.com/yt-dlp/yt-dlp/releases
+2. Download latest **`yt-dlp.exe`** file
+3. Move `yt-dlp.exe` to the same folder as `kintsugi_async.js`
 
 **Verify Installation:**
 ```powershell
@@ -67,55 +72,24 @@ yt-dlp --version
 
 ---
 
-#### 3️⃣ **FFmpeg** (Audio Validator)
+#### 3️⃣ **FFmpeg & FFprobe** (Audio Processing)
 
-**Why?** Checks audio files for corruption and validates file integrity.
+**Why?** Converts audio files and analyzes source quality for dynamic bitrate selection.
 
-**Status:** ⭐ Recommended (optional, but highly suggested)
+**Status:** ⭐ Required for full functionality
 
-**Installation Method A: Download Pre-built Binary (EASIEST)**
+**Installation: Download Pre-built Binary (EASIEST)**
 1. Go to: https://www.gyan.dev/ffmpeg/builds/
-2. Download **`ffmpeg-release-full.7z`** (or `.zip` if you don't have 7-zip)
-3. Extract the archive (right-click → Extract here)
-4. Navigate to the extracted folder → `bin/` folder
-5. Find **`ffmpeg.exe`**
-6. Copy `ffmpeg.exe` to the same folder as `Downloader.ps1`
-
-**Installation Method B: Using Chocolatey**
-```powershell
-# Requires Chocolatey installed. In PowerShell as Administrator:
-choco install ffmpeg
-```
-
-**Installation Method C: Using Scoop**
-```powershell
-# Requires Scoop installed. In PowerShell:
-scoop install ffmpeg
-```
+2. Download **`ffmpeg-release-full.7z`** (or `.zip`)
+3. Extract the archive
+4. Navigate to extracted folder → `bin/` folder
+5. Copy **`ffmpeg.exe`** and **`ffprobe.exe`** to the script folder
 
 **Verify Installation:**
 ```powershell
 ffmpeg -version
+ffprobe -version
 ```
-
----
-
-#### 4️⃣ **PowerShell 5.0 or Higher**
-
-**Status:** ✅ Already included in Windows 10/11
-
-**For Older Windows:**
-- Download: https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows
-
-**Verify:**
-```powershell
-$PSVersionTable.PSVersion
-```
-
----
-
-#### 5️⃣ **Internet Connection**
-- Required for YouTube API access and downloading files
 
 ---
 
@@ -139,126 +113,167 @@ cd KINTSUGI-SMART-DOWNLOADER
 Your folder should look like this:
 ```
 KINTSUGI-SMART-DOWNLOADER/
-├── Downloader.ps1          ← Main script (v8.0 LITE MODE)
-├── yt-dlp.exe              ← Required (install via pip or download)
-├── ffmpeg.exe              ← Optional (for Deep Scan feature)
+├── kintsugi_async.js       ← Main script (v67.0 SMART QUALITY EDITION)
+├── START_SYNC.bat          ← One-click launcher for Windows
+├── yt-dlp.exe              ← Required (download from GitHub)
+├── ffmpeg.exe              ← Required (for conversion & quality analysis)
+├── ffprobe.exe             ← Required (for audio analysis)
+├── data/                   ← Auto-created: database, archive, logs
+│   ├── kintsugi_db.json    ← Playlist database
+│   ├── archive.txt         ← Downloaded video IDs
+│   └── log/                ← Session logs
 └── README.md               ← This file
 ```
 
-**Note**: The script is now in **LITE MODE** which uses archive-based deduplication (no full playlist sync).
-
 ### Step 3: Configure the Script
 
-1. Open `Downloader.ps1` in a text editor (Notepad or VS Code)
-2. Find lines 11-15 and modify:
+1. Open `kintsugi_async.js` in a text editor (Notepad, VS Code, etc.)
+2. Find lines 17-19 and modify:
 
-```powershell
-# Line 11: Where files will be saved
-$OutputFolder = "C:\Users\it\Music\Kintsugi"
-
-# Line 15: Your YouTube playlist URL
-$URL = "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
+```javascript
+const CONFIG = {
+    url: "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID",
+    outputDir: "C:\\Users\\YourName\\Music\\Kintsugi",
+    // ... other settings
+};
 ```
 
 **How to get your playlist URL:**
-- Go to YouTube
-- Open any playlist
+- Go to YouTube → Open any playlist
 - Copy the URL from address bar (e.g., `https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxx`)
 
 ### Step 4: Run the Script
 
-1. Open **PowerShell as Administrator**
-2. Navigate to script folder:
-   ```powershell
-   cd "C:\path\to\KINTSUGI-SMART-DOWNLOADER"
-   ```
-3. Run the script:
-   ```powershell
-   .\Downloader.ps1
-   ```
-4. When prompted, choose whether to perform Deep Scan:
-   - Type `Y` to validate and remove corrupted files
-   - Type `N` to skip straight to downloading
+**Option A: Using Batch File (Easiest)**
+1. Double-click `START_SYNC.bat`
+
+**Option B: Using Command Line**
+```powershell
+cd "C:\path\to\KINTSUGI-SMART-DOWNLOADER"
+node kintsugi_async.js
+```
+
+### Step 5: Choose from Interactive Menu
+
+```
+╔══════════════════════════════════════════════════════╗
+║           KINTSUGI SMART DOWNLOADER                  ║
+╠══════════════════════════════════════════════════════╣
+║  [1] Sync Playlist & Download                        ║
+║  [2] FFmpeg Conversion Only                          ║
+║  [3] Full Sync + Convert                             ║
+║  [4] Settings                                        ║
+║  [5] Exit                                            ║
+╚══════════════════════════════════════════════════════╝
+```
 
 ---
 
-## 📊 How It Works (4 Phases)
+## 📊 How It Works (Multi-Phase Architecture)
 
-### 🔧 Phase 1: Configuration
-- Loads configuration settings
-- Checks for `yt-dlp.exe` and `ffmpeg.exe` availability
-- Creates output folder if it doesn't exist
-- Displays system ready message
+### 🔧 Phase 1: Initialization
+- Auto-detects CPU cores for optimal thread count
+- Creates output and data directories
+- Initializes session logging with timestamp
 
-### 📦 Phase 2: Archive Mode
-- Trusts local `archive.txt` file to prevent duplicate downloads
-- No YouTube playlist metadata sync required
-- Faster startup and less API calls
-- Archive file automatically created/updated during downloads
+### 📡 Phase 2: Playlist Snapshot
+- Connects to YouTube Playlist API via yt-dlp
+- Retrieves all video metadata (title, uploader, status)
+- Detects new, deleted, and private videos
 
-### 🔍 Phase 3: Maintenance (FFmpeg Deep Scan) - Optional
-- **User prompted**: "Lakukan Deep Scan sekarang? (Y/N)"
-- If YES: Scans all existing `.opus` files for corruption
-- Uses FFmpeg to validate audio integrity
-- **Automatically removes** corrupted files
-- Shows live progress bar
-- If NO: Skips maintenance and proceeds to download
+### 🔄 Phase 3: Harmonization (Data Sync)
+- Compares remote playlist with local database
+- Marks videos as: `active`, `orphaned`, `unavailable_pending`, `archived`
+- Preserves title history for deleted videos
 
-### 📥 Phase 4: Download Execution (Smart Fallback)
-**Primary Client:**
-- Uses **Android VR** client (most stable and fastest)
+### 🔍 Phase 4: Audit (User Decision)
+- Prompts for orphaned videos (removed from playlist): Keep or Delete?
+- Prompts for unavailable videos (deleted/private): Keep or Delete?
 
-**If Errors Detected:**
-- Automatically switches to **Web Browser** client
-- Both methods support resume on interruption
-- No duplicate downloads (archive-based prevention)
+### 📝 Phase 5: Re-indexing
+- Renames files based on playlist position: `001 Artist - Title.opus`
+- Archived files get `[ARCHIVED]` prefix
+- Sanitizes illegal filename characters
 
-### 📊 Phase 5: Session Statistics
-```
-Total Koleksi Lokal      : X (Total files in collection)
-Lagu Baru Didownload     : Y (New downloads this session)
+### 🛡️ Phase 6: Whitelist Security
+- Removes untracked files from output directory
+- Cleans up temporary/partial download files
+
+### 📥 Phase 7: Multi-Threaded Download
+**3 Concurrent Workers with Fallback Strategies:**
+1. **NITRO**: Android VR client with 8 connections (fastest)
+2. **SAFE**: Android client with 2 connections (reliable)
+3. **IOS**: iOS client (backup)
+
+- Downloads native Opus audio from YouTube (no re-encoding loss)
+- Embeds thumbnails and metadata
+
+### 🎛️ Phase 8: FFmpeg Conversion (Optional)
+- Converts source files (.webm, .m4a) to optimized Opus
+- **Dynamic Quality**: Analyzes source bitrate and adjusts output accordingly
+  - Lossless sources → 256k
+  - High quality (≥256kbps) → 192k
+  - Standard YouTube (≥128kbps) → 128k
+  - Lower quality → 96k or 64k
+
+---
+
+## 🔧 Configuration Options
+
+Edit the `CONFIG` object in `kintsugi_async.js`:
+
+```javascript
+const CONFIG = {
+    // Core Settings
+    url: "YOUR_PLAYLIST_URL",
+    outputDir: "C:\\Users\\YourName\\Music\\Kintsugi",
+    
+    // Multi-Thread Settings
+    maxDownloadConcurrency: 3,      // Concurrent yt-dlp downloads
+    maxFfmpegConcurrency: 4,        // FFmpeg threads (auto-detects CPU)
+    ffmpegThreadsPerJob: 2,         // Threads per FFmpeg job
+    staggerDelay: 500,              // Delay between workers (ms)
+    
+    // Quality Settings
+    dynamicQuality: true,           // Enable smart quality selection
+    qualityTiers: {
+        lossless: '256k',           // FLAC, WAV, AIFF
+        high: '192k',               // Source ≥ 256 kbps
+        standard: '128k',           // Standard YouTube
+        low: '96k',                 // Source ≥ 96 kbps
+        minimum: '64k'              // Very low source
+    },
+    fallbackBitrate: '128k',        // When probe fails
+    
+    // File Settings
+    supportedSourceFormats: ['.webm', '.m4a'],
+    deleteSourceAfterConvert: true
+};
 ```
 
 ---
 
 ## 📁 Output Files
 
-After running the script, you'll find these files in `$OutputFolder`:
-
-| File | Purpose |
-|------|---------|
+| File/Folder | Purpose |
+|-------------|---------|
 | `*.opus` | Audio files (format: `001 Artist - Title.opus`) |
-| `archive.txt` | Downloaded video IDs (prevents re-downloads) |
-| `error_log.txt` | Raw error messages from tools |
-| `Laporan_Gagal.txt` | Human-readable failure report with links |
+| `[ARCHIVED] *.opus` | Archived files (removed from playlist but kept) |
+| `data/kintsugi_db.json` | Playlist database with video metadata & status |
+| `data/archive.txt` | Downloaded video IDs (prevents re-downloads) |
+| `data/log/*.log` | Session logs with timestamps |
 
 ---
 
-## 🔧 Customization
+## 🎯 Video Status Lifecycle
 
-### Change Audio Format
-Edit `Downloader.ps1` around line 57:
-```powershell
---audio-format opus          # Change to: mp3, m4a, wav, vorbis, flac, etc.
---audio-quality 0            # 0 = highest quality, 9 = lowest
-```
-
-### Change Output Filename Format
-Edit line 57:
-```powershell
--o "%(playlist_index)s %(artist)s - %(title)s.%(ext)s"
-```
-
-**Available Variables:**
-- `%(playlist_index)s` - Position in playlist (001, 002, etc.)
-- `%(title)s` - Video title
-- `%(artist)s` - Channel/uploader name
-- `%(uploader)s` - Uploader name
-- `%(duration)s` - Video duration
-- `%(ext)s` - File extension
-
-### Disable FFmpeg Deep Check
-Remove or comment out the FFmpeg check section in Phase 3. (Not recommended)
+| Status | Description |
+|--------|-------------|
+| `active` | In playlist, ready for download/sync |
+| `orphaned` | Removed from playlist (user chooses: keep or delete) |
+| `unavailable_pending` | Video is deleted/private (user chooses: keep or delete) |
+| `archived` | User chose to keep orphaned video |
+| `unavailable_archived` | User chose to keep deleted/private video |
 
 ---
 
@@ -266,14 +281,13 @@ Remove or comment out the FFmpeg check section in Phase 3. (Not recommended)
 
 | Problem | Solution |
 |---------|----------|
-| **"yt-dlp.exe not found"** | Install via pip: `pip install yt-dlp` OR download from https://github.com/yt-dlp/yt-dlp |
-| **"Access Denied" error** | Run PowerShell as Administrator |
-| **Downloads fail immediately** | Check internet connection, verify playlist URL, check YouTube isn't blocking |
-| **FFmpeg Deep Check not running** | Download FFmpeg from https://www.gyan.dev/ffmpeg/builds/ |
-| **Files marked as corrupted but play fine** | FFmpeg sometimes has false positives; check manually |
-| **"Permission denied on archive.txt"** | Close the file if open in another program; wait 30 seconds |
-| **Script runs but downloads nothing** | Verify all files already downloaded (check `archive.txt`) |
-| **Python/pip not recognized** | Reinstall Python and check "Add Python to PATH" |
+| **"Node.js not found"** | Install from https://nodejs.org/ |
+| **"yt-dlp.exe not found"** | Download from https://github.com/yt-dlp/yt-dlp |
+| **"ffprobe not found"** | Download FFmpeg package (includes ffprobe) |
+| **Downloads fail** | Check internet, verify playlist URL, try different strategy |
+| **Quality always 128k** | Ensure ffprobe.exe is in script folder |
+| **Script hangs on sync** | Large playlists may take time; check YouTube connectivity |
+| **CTRL+C doesn't stop** | Force kill: Press CTRL+C multiple times or close window |
 
 ---
 
@@ -285,39 +299,29 @@ Remove or comment out the FFmpeg check section in Phase 3. (Not recommended)
 3. Verify it works, then use on real playlists
 
 ### Large Playlists
-- **1000+ videos**: May take 2-4 hours first run
-- Script supports resume, so interruptions are safe
-- Check progress in console output
+- **1000+ videos**: First sync takes time, downloads are fast with 3 workers
+- Script supports resume - interruptions are safe
+- Check `data/log/` for detailed progress
+
+### Performance Tuning
+- Increase `maxDownloadConcurrency` for faster downloads (uses more bandwidth)
+- Adjust `maxFfmpegConcurrency` based on your CPU cores
 
 ### Backup Your Downloads
-- Regularly copy `$OutputFolder` to external drive
-- Keep `archive.txt` backed up (contains download history)
-
-### Custom Batch Processing
-Create a PowerShell script to download multiple playlists:
-```powershell
-$playlists = @(
-    "https://www.youtube.com/playlist?list=PLxxxxx",
-    "https://www.youtube.com/playlist?list=PLyyyyy"
-)
-
-foreach ($playlist in $playlists) {
-    # Edit $URL in Downloader.ps1, then run
-    .\Downloader.ps1
-}
-```
+- Regularly backup `outputDir` to external drive
+- Keep `data/kintsugi_db.json` backed up (contains all metadata)
+- Keep `data/archive.txt` backed up (download history)
 
 ---
 
 ## 📝 Important Notes
 
-- ✅ **Archive-Based Deduplication**: Uses local `archive.txt` to prevent re-downloads (faster than sync)
-- ✅ **Corruption Detection**: FFmpeg Deep Scan option validates and removes corrupted files
-- ✅ **Intelligent Fallback**: Android VR + Web Browser clients for maximum reliability
-- ✅ **Resume Support**: Interruptions don't cause re-downloads (archive prevents duplicates)
-- ✅ **Optional Maintenance**: Deep Scan is optional - script works fine without FFmpeg
-- ⚠️ **LITE MODE**: No full playlist synchronization (uses archive only)
-- ⚠️ **First Run**: May take longer depending on playlist size
+- ✅ **Native Opus**: Downloads YouTube's native Opus audio (no re-encoding loss)
+- ✅ **Smart Quality**: Analyzes source and adjusts output bitrate accordingly
+- ✅ **Multi-Threaded**: Parallel downloads and conversions for speed
+- ✅ **Resume Support**: Interruptions don't cause re-downloads
+- ✅ **Database Driven**: Full tracking of playlist state and file status
+- ⚠️ **First Run**: Initial sync may take longer for large playlists
 - ⚠️ **Respect Copyright**: Ensure you have rights to download content
 
 ---
@@ -334,7 +338,7 @@ This project is for **personal, non-commercial use only**.
 
 ## 👤 Author
 
-**nugraha-a** - KINTSUGI Smart Downloader Ultimate Edition
+**nugraha-a** - KINTSUGI Smart Downloader v67.0 (SMART QUALITY EDITION)
 
 ---
 
@@ -347,4 +351,4 @@ Found a bug? Have a suggestion?
 ---
 
 **Last Updated:** January 2026
-**Version:** v8.0 LITE MODE
+**Version:** v67.0 SMART QUALITY EDITION
