@@ -307,7 +307,7 @@ class ThreadPool {
     }
 }
 
-// --- 1. HARMONY MANAGER (FILE I/O TRACKING) ---
+// --- 1. HARMONY MANAGER (FILE I/O TRACKING & SAFETY) ---
 function getDataDir() {
     return path.join(CONFIG.outputDir, CONFIG.dataDir);
 }
@@ -317,18 +317,49 @@ function loadDatabase() {
     const dataDir = getDataDir();
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
-    const p = path.join(dataDir, CONFIG.dbFile);
-    if (fs.existsSync(p)) {
-        Logger.file("DB_LOAD", `Membaca file database: ${CONFIG.dataDir}/${CONFIG.dbFile}`);
-        try { 
-            db = JSON.parse(fs.readFileSync(p, 'utf8')); 
-            Logger.file("DB_LOAD", `Berhasil memuat ${Object.keys(db).length} entri.`);
+    const dbPath = path.join(dataDir, CONFIG.dbFile);
+    const bakPath = path.join(dataDir, CONFIG.dbFile + ".bak");
+
+    // Helper to try parse
+    const tryLoad = (p) => {
+        try {
+            const content = fs.readFileSync(p, 'utf8');
+            if (!content.trim()) throw new Error("Empty file");
+            return JSON.parse(content);
         } catch (e) {
-            Logger.error("DB_LOAD", `Gagal membaca DB: ${e.message}`);
+            return null;
+        }
+    };
+
+    if (fs.existsSync(dbPath)) {
+        Logger.file("DB_LOAD", `Membaca database: ${CONFIG.dbFile}`);
+        db = tryLoad(dbPath);
+        
+        if (!db) {
+            Logger.error("DB_LOAD", `${C.Red}DATABASE UTAMA KORUP/KOSONG!${C.Reset}`);
+            if (fs.existsSync(bakPath)) {
+                Logger.warn("DB_LOAD", "Mencoba membaca backup...");
+                db = tryLoad(bakPath);
+                if (db) {
+                    Logger.info("DB_LOAD", "Backup berhasil dimuat. Menyimpan ulang sebagai main DB.");
+                    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+                }
+            }
         }
     } else {
         Logger.warn("DB_LOAD", "Database belum ada. Membuat baru.");
+        return {}; // Safe to return empty only if file physically doesn't exist
     }
+
+    if (!db) {
+        // CRITICAL: Jika DB ada tapi korup, dan backup gagal -> STOP.
+        // Jangan return {} karena runWhitelist akan menghapus semua file!
+        Logger.error("FATAL", "GAGAL TYPE 1: Database korup dan tidak ada backup valid.");
+        Logger.error("FATAL", "Script dihentikan demi keamanan file Anda.");
+        process.exit(1);
+    }
+    
+    Logger.file("DB_LOAD", `Berhasil memuat ${Object.keys(db).length} entri.`);
     return db;
 }
 
@@ -336,19 +367,38 @@ function saveHarmony(db) {
     const dataDir = getDataDir();
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
-    Logger.file("DB_SAVE", `Menyimpan perubahan ke ${CONFIG.dataDir}/${CONFIG.dbFile}...`);
-    fs.writeFileSync(path.join(dataDir, CONFIG.dbFile), JSON.stringify(db, null, 2), 'utf8');
-    
-    const validIDs = [];
-    Object.values(db).forEach(item => {
-        if (item.local_filename) {
-            const fullPath = path.join(CONFIG.outputDir, item.local_filename);
-            if (fs.existsSync(fullPath)) validIDs.push(`youtube ${item.id}`);
+    const dbPath = path.join(dataDir, CONFIG.dbFile);
+    const bakPath = path.join(dataDir, CONFIG.dbFile + ".bak");
+
+    try {
+        // 1. Create Atomic Backup from existing file (if valid)
+        if (fs.existsSync(dbPath)) {
+             try {
+                 const currentContent = fs.readFileSync(dbPath);
+                 // Only backup if current file is valid json
+                 JSON.parse(currentContent); 
+                 fs.writeFileSync(bakPath, currentContent);
+             } catch(e) {
+                 Logger.warn("DB_SAVE", "Main DB file corrupt on disk, skipping backup creation.");
+             }
         }
-    });
-    
-    Logger.file("ARC_SAVE", `Update ${CONFIG.dataDir}/${CONFIG.archiveFile} (${validIDs.length} valid items)...`);
-    fs.writeFileSync(path.join(dataDir, CONFIG.archiveFile), validIDs.join('\n'), 'utf8');
+
+        // 2. Write New
+        // Logger.file("DB_SAVE", `Saving DB...`); // Reduce noise
+        fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
+        
+        // 3. Update Archive Text
+        const validIDs = [];
+        Object.values(db).forEach(item => {
+            if (item.local_filename) {
+                const fullPath = path.join(CONFIG.outputDir, item.local_filename);
+                if (fs.existsSync(fullPath)) validIDs.push(`youtube ${item.id}`);
+            }
+        });
+        fs.writeFileSync(path.join(dataDir, CONFIG.archiveFile), validIDs.join('\n'), 'utf8');
+    } catch (e) {
+        Logger.error("DB_SAVE", `FATAL: Gagal menyimpan database! ${e.message}`);
+    }
 }
 
 // --- 2. SNAPSHOT ---
@@ -383,21 +433,24 @@ function getRemoteMetadata() {
 }
 
 // --- 3. CLEANUP ---
+// --- 3. CLEANUP ---
 function runNuclearClean() {
     Logger.info("CLEANUP", "Scanning residu file (.temp/.part)...");
     const files = fs.readdirSync(CONFIG.outputDir);
     let c = 0;
     files.forEach(f => {
         const fullPath = path.join(CONFIG.outputDir, f);
-        if (f.includes('.temp.') || f.endsWith('.part') || f.endsWith('.ytdl') || f.endsWith('.webp')) {
+        // Strict cleanup: only delete known temporary extensions
+        if (f.endsWith('.part') || f.endsWith('.ytdl') || f.endsWith('.temp') || (f.includes('.temp.') && !f.endsWith('.js'))) {
             try { 
-                fs.unlinkSync(fullPath); 
+                fs.rmSync(fullPath, { force: true }); // Safer than unlinkSync
                 c++; 
                 Logger.file("DELETE", `Menghapus residu: ${f}`);
             } catch(e){
                 Logger.error("DELETE", `Gagal hapus ${f}: ${e.message}`);
             }
         }
+        // DEPRECATED: do not delete .webp here, handled by user preference or strict logic elsewhere
     });
     if (c > 0) Logger.warn("CLEANUP", `Dibersihkan ${c} file residu.`);
 }
@@ -590,23 +643,55 @@ function runReindexing(db) {
     saveHarmony(db);
 }
 
-// --- 7. WHITELIST ---
+// --- 7. SAFETY WHITELIST ---
 function runWhitelist(db) {
-    Logger.info("SECURITY", "Final Whitelist Check...");
+    Logger.info("SECURITY", "Running Safety Whitelist Check...");
+    
+    // 1. Collect Valid Files from DB
     const validFiles = new Set();
-    Object.values(db).forEach(i => { if(i.local_filename) validFiles.add(i.local_filename); });
-    // data folder contains db, archive, and logs - skip it
-    validFiles.add(CONFIG.dataDir);
-
+    Object.values(db).forEach(i => { if(i.local_filename) validFiles.add(i.local_filename.toLowerCase()); });
+    
+    // 2. System Whitelist (Always Safe)
+    const systemWhitelist = [
+        CONFIG.dataDir.toLowerCase(),
+        CONFIG.ytDlpExe.toLowerCase(),
+        CONFIG.ffmpegExe.toLowerCase(),
+        CONFIG.ffprobeExe.toLowerCase(),
+        path.basename(__filename).toLowerCase(), // This script
+        'package.json', 'package-lock.json',
+        'node_modules', '.git', '.gitignore', '.env'
+    ];
+    
     const files = fs.readdirSync(CONFIG.outputDir);
     files.forEach(f => {
         const fullPath = path.join(CONFIG.outputDir, f);
-        // Skip directories (like data/) and valid files
-        if (!validFiles.has(f) && !fs.lstatSync(fullPath).isDirectory()) {
-            try { 
+        const lowerName = f.toLowerCase();
+        
+        // Skip directories and system files
+        if (fs.lstatSync(fullPath).isDirectory()) return;
+        if (systemWhitelist.some(sys => lowerName === sys || lowerName.endsWith('.js') || lowerName.endsWith('.json') || lowerName.endsWith('.log') || lowerName.endsWith('.bat'))) return;
+        
+        // Strict Logic: Only delete if it LOOKS like a Kintsugi file [001 Artist - Title] (starts with 3 digits) AND is not in DB
+        // OR if it is a media file format we manage (.opus, .webm, .m4a)
+        const isMediaFile = ['.opus', '.webm', '.m4a', '.mp3', '.flac', '.wav'].some(ext => lowerName.endsWith(ext));
+        const looksLikeKintsugi = /^\d{3}\s/.test(f); // Starts with "001 "
+        
+        // IF it's in our Valid List, it's safe.
+        if (validFiles.has(lowerName)) return;
+
+        // IF it is NOT valid, AND looks like our file, THEN it is an orphan/garbage.
+        if (isMediaFile || looksLikeKintsugi) {
+             try { 
+                // QUARANTINE / SAFETY DELETE
+                // For now, we delete, but because of loadDatabase check, we know DB is valid.
                 fs.unlinkSync(fullPath); 
-                Logger.warn("SECURITY", `Menghapus file liar: ${f}`);
-            } catch(e){}
+                Logger.warn("SECURITY", `Menghapus file tidak dikenal (Orphan): ${f}`);
+            } catch(e){
+                Logger.error("DELETE", `Gagal hapus ${f}: ${e.message}`);
+            }
+        } else {
+             // Unknown file that doesn't look like ours (e.g. "my_notes.txt") -> IGNORE IT
+             // Logger.file("IGNORE", `Ignoring alien file: ${f}`);
         }
     });
 }
