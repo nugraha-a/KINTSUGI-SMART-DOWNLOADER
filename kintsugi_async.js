@@ -15,32 +15,32 @@ const os = require('os');
 
 // --- KONFIGURASI ---
 const CONFIG = {
-    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wvhzmzj7ciDDRC99alMEYiC",
-    outputDir: "C:\\Users\\it\\Music\\Kintsugi",
+    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wsywuTz3UctQ8GqGkVTOxx8",
+    outputDir: "C:\\Users\\it\\Music\\Missing",
     ytDlpExe: "yt-dlp.exe",
-    ffmpegExe: "ffmpeg",   // FFmpeg executable path
-    ffprobeExe: "ffprobe", // FFprobe for audio analysis
-    
+    ffmpegExe: "ffmpeg.exe",   // FFmpeg executable path
+    ffprobeExe: "ffprobe.exe", // FFprobe for audio analysis
+
     // DATA FOLDER STRUCTURE
     dataDir: "data",            // data/ folder for database and archive
     logDir: "data/log",         // data/log/ folder for log files
     dbFile: "kintsugi_db.json",
     archiveFile: "archive.txt",
-    
+
     // MODE: SESSION (Sesuai Request)
-    logMode: 'SESSION', 
-    
+    logMode: 'SESSION',
+
     // MULTI-THREAD CONFIG
     maxDownloadConcurrency: 3,      // Concurrent yt-dlp downloads
     maxFfmpegConcurrency: Math.max(2, os.cpus().length - 2), // FFmpeg threads (auto-detect CPU)
     ffmpegThreadsPerJob: 2,         // FFmpeg threads per single conversion job
     staggerDelay: 500,              // Delay between starting workers (ms)
-    
+
     // SOURCE FILES CONVERSION CONFIG (YouTube original formats only)
     sourceDir: null,                // Will prompt user if not set, or use outputDir
     supportedSourceFormats: ['.webm', '.m4a'],  // YouTube original audio formats
     deleteSourceAfterConvert: true, // Delete source files after successful conversion
-    
+
     // DYNAMIC QUALITY CONFIG (based on YouTube Opus quality tiers)
     // YouTube Quality Tiers:
     //   Opus 249: ~50 kbps  (Low quality / data saver)
@@ -72,15 +72,15 @@ function forceKill() {
     if (isStopping) return;
     isStopping = true;
     Logger.error("SYSTEM", "User menekan CTRL+C. Force Stopping...");
-    
+
     // Kill all active processes
     activeProcesses.forEach(proc => {
-        try { proc.kill('SIGKILL'); } catch(e) {}
+        try { proc.kill('SIGKILL'); } catch (e) { }
     });
-    
-    try { execSync(`taskkill /F /IM ${CONFIG.ytDlpExe} /T`, { stdio: 'ignore' }); } catch(e) {}
-    try { execSync(`taskkill /F /IM ${CONFIG.ffmpegExe} /T`, { stdio: 'ignore' }); } catch(e) {}
-    try { execSync(`taskkill /F /IM ${CONFIG.ffprobeExe} /T`, { stdio: 'ignore' }); } catch(e) {}
+
+    try { execSync(`taskkill /F /IM ${CONFIG.ytDlpExe} /T`, { stdio: 'ignore' }); } catch (e) { }
+    try { execSync(`taskkill /F /IM ${CONFIG.ffmpegExe} /T`, { stdio: 'ignore' }); } catch (e) { }
+    try { execSync(`taskkill /F /IM ${CONFIG.ffprobeExe} /T`, { stdio: 'ignore' }); } catch (e) { }
     process.exit(0);
 }
 process.on('SIGINT', forceKill);
@@ -116,7 +116,7 @@ async function probeAudioInfo(filePath) {
 
         child.on('close', (code) => {
             activeProcesses.delete(child);
-            
+
             if (code !== 0) {
                 Logger.file("PROBE", `FFprobe failed for ${path.basename(filePath)}`);
                 resolve(null);
@@ -126,7 +126,7 @@ async function probeAudioInfo(filePath) {
             try {
                 const data = JSON.parse(stdout);
                 const audioStream = data.streams?.find(s => s.codec_type === 'audio');
-                
+
                 if (!audioStream) {
                     resolve(null);
                     return;
@@ -134,7 +134,7 @@ async function probeAudioInfo(filePath) {
 
                 const codec = audioStream.codec_name?.toLowerCase() || '';
                 const isLossless = ['flac', 'alac', 'wav', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'aiff'].includes(codec);
-                
+
                 // Get bitrate (prefer stream bitrate, fallback to format bitrate)
                 let bitrate = parseInt(audioStream.bit_rate) || parseInt(data.format?.bit_rate) || 0;
                 bitrate = Math.round(bitrate / 1000); // Convert to kbps
@@ -217,10 +217,10 @@ const Logger = {
         const now = new Date();
         const timeStr = now.toISOString().replace('T', ' ').split('.')[0];
         const fileLine = `[${timeStr}] [${level}] [${context}] ${message}\n`;
-        
+
         try {
             fs.appendFileSync(Logger.currentLogPath, fileLine);
-        } catch (e) {}
+        } catch (e) { }
 
         let color = C.Reset;
         if (level === 'INFO') color = C.Green;
@@ -228,7 +228,7 @@ const Logger = {
         if (level === 'ERROR') color = C.Red;
         if (level === 'FILE') color = C.Magenta;
         if (level === 'THREAD') color = C.Blue;
-        
+
         if (level !== 'FILE') {
             console.log(`${color}[${context}] ${message}${C.Reset}`);
         }
@@ -239,12 +239,12 @@ const Logger = {
     error: (context, msg) => Logger._write('ERROR', context, msg),
     file: (context, msg) => Logger._write('FILE', context, msg),
     thread: (context, msg) => Logger._write('THREAD', context, msg),
-    
+
     startSession: () => {
         const sep = "=".repeat(60);
         const qualityMode = CONFIG.dynamicQuality ? 'DYNAMIC' : 'FIXED';
         const header = `\n${sep}\n SESSION ID: ${path.basename(Logger.currentLogPath)}\n START TIME: ${new Date().toLocaleString()}\n CPU CORES: ${os.cpus().length}\n DOWNLOAD THREADS: ${CONFIG.maxDownloadConcurrency}\n FFMPEG THREADS: ${CONFIG.maxFfmpegConcurrency}\n QUALITY MODE: ${qualityMode}\n${sep}\n`;
-        try { fs.appendFileSync(Logger.currentLogPath, header); } catch (e) {}
+        try { fs.appendFileSync(Logger.currentLogPath, header); } catch (e) { }
         console.clear();
         console.log(`${C.Cyan}${sep}`);
         console.log(`   KINTSUGI v67.0 (SMART QUALITY EDITION)`);
@@ -279,7 +279,7 @@ class ThreadPool {
         while (this.running < this.maxConcurrency && this.queue.length > 0 && !isStopping) {
             const { task, resolve, reject } = this.queue.shift();
             this.running++;
-            
+
             task()
                 .then(result => {
                     this.completed++;
@@ -316,7 +316,7 @@ function loadDatabase() {
     let db = {};
     const dataDir = getDataDir();
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    
+
     const dbPath = path.join(dataDir, CONFIG.dbFile);
     const bakPath = path.join(dataDir, CONFIG.dbFile + ".bak");
 
@@ -334,7 +334,7 @@ function loadDatabase() {
     if (fs.existsSync(dbPath)) {
         Logger.file("DB_LOAD", `Membaca database: ${CONFIG.dbFile}`);
         db = tryLoad(dbPath);
-        
+
         if (!db) {
             Logger.error("DB_LOAD", `${C.Red}DATABASE UTAMA KORUP/KOSONG!${C.Reset}`);
             if (fs.existsSync(bakPath)) {
@@ -358,7 +358,7 @@ function loadDatabase() {
         Logger.error("FATAL", "Script dihentikan demi keamanan file Anda.");
         process.exit(1);
     }
-    
+
     Logger.file("DB_LOAD", `Berhasil memuat ${Object.keys(db).length} entri.`);
     return db;
 }
@@ -366,27 +366,27 @@ function loadDatabase() {
 function saveHarmony(db) {
     const dataDir = getDataDir();
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    
+
     const dbPath = path.join(dataDir, CONFIG.dbFile);
     const bakPath = path.join(dataDir, CONFIG.dbFile + ".bak");
 
     try {
         // 1. Create Atomic Backup from existing file (if valid)
         if (fs.existsSync(dbPath)) {
-             try {
-                 const currentContent = fs.readFileSync(dbPath);
-                 // Only backup if current file is valid json
-                 JSON.parse(currentContent); 
-                 fs.writeFileSync(bakPath, currentContent);
-             } catch(e) {
-                 Logger.warn("DB_SAVE", "Main DB file corrupt on disk, skipping backup creation.");
-             }
+            try {
+                const currentContent = fs.readFileSync(dbPath);
+                // Only backup if current file is valid json
+                JSON.parse(currentContent);
+                fs.writeFileSync(bakPath, currentContent);
+            } catch (e) {
+                Logger.warn("DB_SAVE", "Main DB file corrupt on disk, skipping backup creation.");
+            }
         }
 
         // 2. Write New
         // Logger.file("DB_SAVE", `Saving DB...`); // Reduce noise
         fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
-        
+
         // 3. Update Archive Text
         const validIDs = [];
         Object.values(db).forEach(item => {
@@ -408,10 +408,10 @@ function getRemoteMetadata() {
         const args = ["--flat-playlist", "--dump-json", "--no-clean-info", CONFIG.url];
         const child = spawn(path.resolve(__dirname, CONFIG.ytDlpExe), args, { shell: false });
         activeProcesses.add(child);
-        
+
         let rawData = "";
         let count = 0;
-        
+
         process.stdout.write(`${C.Magenta}>>> Snapshot... (0)${C.Reset}`);
         child.stdout.on('data', (chunk) => {
             rawData += chunk.toString();
@@ -421,7 +421,7 @@ function getRemoteMetadata() {
 
         child.on('close', (code) => {
             activeProcesses.delete(child);
-            console.log(""); 
+            console.log("");
             if (code !== 0) { Logger.error("NET", "Gagal koneksi YouTube."); process.exit(1); }
             const entries = rawData.trim().split('\n').map(line => {
                 try { return JSON.parse(line); } catch (e) { return null; }
@@ -442,11 +442,11 @@ function runNuclearClean() {
         const fullPath = path.join(CONFIG.outputDir, f);
         // Strict cleanup: only delete known temporary extensions
         if (f.endsWith('.part') || f.endsWith('.ytdl') || f.endsWith('.temp') || (f.includes('.temp.') && !f.endsWith('.js'))) {
-            try { 
+            try {
                 fs.rmSync(fullPath, { force: true }); // Safer than unlinkSync
-                c++; 
+                c++;
                 Logger.file("DELETE", `Menghapus residu: ${f}`);
-            } catch(e){
+            } catch (e) {
                 Logger.error("DELETE", `Gagal hapus ${f}: ${e.message}`);
             }
         }
@@ -460,12 +460,12 @@ function runHarmonizer(remoteEntries, db) {
     Logger.info("SYNC", "Harmonizing Data...");
     const liveIDs = new Set();
     let stats = { new: 0, update: 0, dead: 0 };
-    
+
     remoteEntries.forEach((entry, idx) => {
         liveIDs.add(entry.id);
         const targetIndex = idx + 1;
         const isDead = (entry.title === '[Deleted video]' || entry.title === '[Private video]');
-        
+
         if (isDead) stats.dead++;
 
         if (db[entry.id]) {
@@ -483,8 +483,8 @@ function runHarmonizer(remoteEntries, db) {
             } else {
                 // If video is back in playlist and was archived but file is deleted, reset to active
                 if (newStatus === 'archived' || newStatus === 'unavailable_archived') {
-                    const hasFile = db[entry.id].local_filename && 
-                                   fs.existsSync(path.join(CONFIG.outputDir, db[entry.id].local_filename));
+                    const hasFile = db[entry.id].local_filename &&
+                        fs.existsSync(path.join(CONFIG.outputDir, db[entry.id].local_filename));
                     if (!hasFile) {
                         // File was deleted, reset to active for re-download
                         newStatus = 'active';
@@ -522,7 +522,7 @@ function runHarmonizer(remoteEntries, db) {
             db[id].playlist_index = null;
         }
     });
-    
+
     return { liveIDs };
 }
 
@@ -537,14 +537,14 @@ async function runDoubleAudit(db) {
         console.log(` [1] HAPUS TOTAL.`);
         console.log(` [2] KEEP (Arsipkan).`);
         const ans = await ask(`${C.Yellow}Pilihan: ${C.Reset}`);
-        
+
         orphans.forEach(item => {
             if (ans === '1') {
                 if (item.local_filename) {
-                    try { 
-                        fs.unlinkSync(path.join(CONFIG.outputDir, item.local_filename)); 
+                    try {
+                        fs.unlinkSync(path.join(CONFIG.outputDir, item.local_filename));
                         Logger.file("DELETE", `Menghapus file fisik: ${item.local_filename}`);
-                    } catch(e){}
+                    } catch (e) { }
                 }
                 delete db[item.id];
                 Logger.info("AUDIT", `[DEL] ${item.title}`);
@@ -564,10 +564,10 @@ async function runDoubleAudit(db) {
         unavail.forEach(item => {
             if (ans === '1') {
                 if (item.local_filename) {
-                     try { 
-                         fs.unlinkSync(path.join(CONFIG.outputDir, item.local_filename)); 
-                         Logger.file("DELETE", `Menghapus file fisik: ${item.local_filename}`);
-                     } catch(e){}
+                    try {
+                        fs.unlinkSync(path.join(CONFIG.outputDir, item.local_filename));
+                        Logger.file("DELETE", `Menghapus file fisik: ${item.local_filename}`);
+                    } catch (e) { }
                 }
                 delete db[item.id];
                 Logger.info("AUDIT", `[DEL] ${item.title}`);
@@ -584,33 +584,33 @@ async function runDoubleAudit(db) {
 // --- 6. RE-INDEXING ---
 function runReindexing(db) {
     Logger.info("INDEX", "Memeriksa nama file...");
-    
+
     // Sanitize filename: remove Windows illegal chars  < > : " / \ | ? *
     const sanitizeFilename = (str) => {
         if (!str) return '';
         return str.replace(/[<>:"/\\|?*]/g, '').trim();
     };
-    
+
     const doRename = (item, targetName) => {
         const oldName = item.local_filename;
         if (oldName && fs.existsSync(path.join(CONFIG.outputDir, oldName))) {
             if (oldName !== targetName) {
                 // Check if target exists AND is NOT the same file (case-insensitive on Windows)
                 const isSameFile = oldName.toLowerCase() === targetName.toLowerCase();
-                
+
                 if (fs.existsSync(path.join(CONFIG.outputDir, targetName)) && !isSameFile) {
                     // Only delete if it's a DIFFERENT file (not just case change)
-                    try { 
-                        fs.unlinkSync(path.join(CONFIG.outputDir, targetName)); 
+                    try {
+                        fs.unlinkSync(path.join(CONFIG.outputDir, targetName));
                         Logger.file("DELETE", `Menghapus konflik nama: ${targetName}`);
-                    } catch(e){}
+                    } catch (e) { }
                 }
-                
+
                 try {
                     fs.renameSync(path.join(CONFIG.outputDir, oldName), path.join(CONFIG.outputDir, targetName));
                     db[item.id].local_filename = targetName;
                     Logger.file("RENAME", `${oldName} -> ${targetName}`);
-                } catch(e) {
+                } catch (e) {
                     Logger.error("RENAME", `Gagal rename: ${e.message}`);
                 }
             }
@@ -631,7 +631,7 @@ function runReindexing(db) {
         const unavailableCount = archivedItems.filter(i => i.status === 'unavailable_archived').length;
         Logger.info("INDEX", `Archived files: ${archivedCount} archived, ${unavailableCount} unavailable_archived`);
     }
-    
+
     archivedItems.forEach(item => {
         const cleanUploader = sanitizeFilename(item.uploader);
         const cleanTitle = sanitizeFilename(item.title);
@@ -639,18 +639,18 @@ function runReindexing(db) {
         const target = `${tag} ${cleanUploader} - ${cleanTitle}.opus`;
         doRename(item, target);
     });
-    
+
     saveHarmony(db);
 }
 
 // --- 7. SAFETY WHITELIST ---
 function runWhitelist(db) {
     Logger.info("SECURITY", "Running Safety Whitelist Check...");
-    
+
     // 1. Collect Valid Files from DB
     const validFiles = new Set();
-    Object.values(db).forEach(i => { if(i.local_filename) validFiles.add(i.local_filename.toLowerCase()); });
-    
+    Object.values(db).forEach(i => { if (i.local_filename) validFiles.add(i.local_filename.toLowerCase()); });
+
     // 2. System Whitelist (Always Safe)
     const systemWhitelist = [
         CONFIG.dataDir.toLowerCase(),
@@ -661,37 +661,37 @@ function runWhitelist(db) {
         'package.json', 'package-lock.json',
         'node_modules', '.git', '.gitignore', '.env'
     ];
-    
+
     const files = fs.readdirSync(CONFIG.outputDir);
     files.forEach(f => {
         const fullPath = path.join(CONFIG.outputDir, f);
         const lowerName = f.toLowerCase();
-        
+
         // Skip directories and system files
         if (fs.lstatSync(fullPath).isDirectory()) return;
         if (systemWhitelist.some(sys => lowerName === sys || lowerName.endsWith('.js') || lowerName.endsWith('.json') || lowerName.endsWith('.log') || lowerName.endsWith('.bat'))) return;
-        
+
         // Strict Logic: Only delete if it LOOKS like a Kintsugi file [001 Artist - Title] (starts with 3 digits) AND is not in DB
         // OR if it is a media file format we manage (.opus, .webm, .m4a)
         const isMediaFile = ['.opus', '.webm', '.m4a', '.mp3', '.flac', '.wav'].some(ext => lowerName.endsWith(ext));
         const looksLikeKintsugi = /^\d{3}\s/.test(f); // Starts with "001 "
-        
+
         // IF it's in our Valid List, it's safe.
         if (validFiles.has(lowerName)) return;
 
         // IF it is NOT valid, AND looks like our file, THEN it is an orphan/garbage.
         if (isMediaFile || looksLikeKintsugi) {
-             try { 
+            try {
                 // QUARANTINE / SAFETY DELETE
                 // For now, we delete, but because of loadDatabase check, we know DB is valid.
-                fs.unlinkSync(fullPath); 
+                fs.unlinkSync(fullPath);
                 Logger.warn("SECURITY", `Menghapus file tidak dikenal (Orphan): ${f}`);
-            } catch(e){
+            } catch (e) {
                 Logger.error("DELETE", `Gagal hapus ${f}: ${e.message}`);
             }
         } else {
-             // Unknown file that doesn't look like ours (e.g. "my_notes.txt") -> IGNORE IT
-             // Logger.file("IGNORE", `Ignoring alien file: ${f}`);
+            // Unknown file that doesn't look like ours (e.g. "my_notes.txt") -> IGNORE IT
+            // Logger.file("IGNORE", `Ignoring alien file: ${f}`);
         }
     });
 }
@@ -712,8 +712,8 @@ async function convertSourceToOpus(sourceFile, outputFile, bitrate, workerId) {
             outputFile
         ];
 
-        const ffmpegPath = CONFIG.ffmpegExe.includes(path.sep) 
-            ? CONFIG.ffmpegExe 
+        const ffmpegPath = CONFIG.ffmpegExe.includes(path.sep)
+            ? CONFIG.ffmpegExe
             : path.resolve(__dirname, CONFIG.ffmpegExe);
 
         const child = spawn(ffmpegPath, args, { shell: false });
@@ -742,7 +742,7 @@ async function convertSourceToOpus(sourceFile, outputFile, bitrate, workerId) {
 
 async function runFfmpegConversionQueue(sourceDir) {
     const targetDir = sourceDir || CONFIG.outputDir;
-    
+
     if (!fs.existsSync(targetDir)) {
         Logger.error("FFMPEG", `Source directory tidak ditemukan: ${targetDir}`);
         return { converted: 0, failed: 0 };
@@ -776,7 +776,7 @@ async function runFfmpegConversionQueue(sourceDir) {
         const sourcePath = path.join(targetDir, file);
         const baseName = path.basename(file, path.extname(file));
         const outputPath = path.join(targetDir, `${baseName}.opus`);
-        
+
         // Skip if output already exists
         if (fs.existsSync(outputPath)) {
             Logger.file("FFMPEG", `Skip (exists): ${baseName}.opus`);
@@ -786,40 +786,40 @@ async function runFfmpegConversionQueue(sourceDir) {
         const promise = pool.add(async () => {
             const workerId = (index % CONFIG.maxFfmpegConcurrency) + 1;
             const displayName = baseName.length > 30 ? baseName.substring(0, 27) + '...' : baseName;
-            
+
             // Determine optimal bitrate for this file
             let bitrate = CONFIG.fallbackBitrate;
             let qualityInfo = '';
-            
+
             if (CONFIG.dynamicQuality) {
                 const audioInfo = await probeAudioInfo(sourcePath);
                 if (audioInfo) {
                     bitrate = getOptimalOpusBitrate(audioInfo);
                     qualityInfo = ` [${audioInfo.codec}@${audioInfo.bitrate}k → ${bitrate}]`;
-                    
+
                     // Track quality stats
                     results.qualityStats[bitrate] = (results.qualityStats[bitrate] || 0) + 1;
                 }
             }
-            
+
             Logger.thread(`W${workerId}`, `Converting: ${displayName}${qualityInfo}`);
-            
+
             try {
                 await convertSourceToOpus(sourcePath, outputPath, bitrate, workerId);
-                
+
                 Logger.info(`W${workerId}`, `✓ ${displayName}.opus @ ${bitrate}`);
                 results.converted++;
-                
+
                 // Delete source if configured
                 if (CONFIG.deleteSourceAfterConvert && fs.existsSync(outputPath)) {
                     try {
                         fs.unlinkSync(sourcePath);
                         Logger.file("DELETE", `Source deleted: ${file}`);
-                    } catch(e) {
+                    } catch (e) {
                         Logger.warn("DELETE", `Gagal hapus source: ${file}`);
                     }
                 }
-                
+
                 return { success: true, file, bitrate };
             } catch (err) {
                 Logger.error(`W${workerId}`, `✗ ${displayName}: ${err.message}`);
@@ -827,12 +827,12 @@ async function runFfmpegConversionQueue(sourceDir) {
                 return { success: false, file, error: err.message };
             }
         });
-        
+
         promises.push(promise);
     });
 
     await Promise.allSettled(promises);
-    
+
     // Log quality distribution
     if (Object.keys(results.qualityStats).length > 0) {
         const statsStr = Object.entries(results.qualityStats)
@@ -840,7 +840,7 @@ async function runFfmpegConversionQueue(sourceDir) {
             .join(', ');
         Logger.info("FFMPEG", `Quality distribution: ${statsStr}`);
     }
-    
+
     Logger.info("FFMPEG", `Konversi selesai: ${results.converted} sukses, ${results.failed} gagal.`);
     return results;
 }
@@ -893,7 +893,7 @@ async function downloadSingleVideo(item, db, workerId) {
 
                 child.on('close', (code) => {
                     activeProcesses.delete(child);
-                    
+
                     if (code === 0) {
                         const mergeMatch = fullOutput.match(/Merging formats into "(.*?)"/);
                         const destMatch = fullOutput.match(/Destination: (.*?)\s/);
@@ -977,9 +977,9 @@ async function startMultiThreadDownloadQueue(db) {
     queue.forEach((item, index) => {
         const promise = pool.add(async () => {
             const workerId = (index % CONFIG.maxDownloadConcurrency) + 1;
-            
+
             const result = await downloadSingleVideo(item, db, workerId);
-            
+
             if (result.success) {
                 results.downloaded++;
             } else {
@@ -994,13 +994,13 @@ async function startMultiThreadDownloadQueue(db) {
 
             return result;
         });
-        
+
         promises.push(promise);
     });
 
     await Promise.allSettled(promises);
     saveHarmony(db);
-    
+
     Logger.info("DOWN", `Download selesai: ${results.downloaded} sukses, ${results.failed} gagal.`);
     return results;
 }
@@ -1009,9 +1009,9 @@ async function startMultiThreadDownloadQueue(db) {
 async function showInteractiveMenu() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(r => rl.question(q, r));
-    
+
     const qualityStr = CONFIG.dynamicQuality ? 'DYNAMIC' : 'FIXED';
-    
+
     console.log(`\n${C.Cyan}╔════════════════════════════════════════════════════╗`);
     console.log(`║     KINTSUGI v67.0 - SMART QUALITY EDITION         ║`);
     console.log(`╠════════════════════════════════════════════════════╣`);
@@ -1023,33 +1023,33 @@ async function showInteractiveMenu() {
     console.log(`╠════════════════════════════════════════════════════╣`);
     console.log(`║ Quality Mode: ${qualityStr.padEnd(38)}║`);
     console.log(`╚════════════════════════════════════════════════════╝${C.Reset}`);
-    
+
     const choice = await ask(`${C.Yellow}Pilihan: ${C.Reset}`);
     rl.close();
-    
+
     return choice.trim();
 }
 
 async function showSettingsMenu() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(r => rl.question(q, r));
-    
+
     const tiers = CONFIG.qualityTiers;
-    
+
     Logger.info("MENU", "Settings menu opened");
-    
+
     console.log(`\n${C.Cyan}╔════════════════════════════════════════════════════╗`);
     console.log(`║                    SETTINGS                        ║`);
     console.log(`╚════════════════════════════════════════════════════╝${C.Reset}`);
-    
+
     console.log(`\n${C.Yellow}── Thread Configuration ──${C.Reset}`);
     console.log(`   Download Threads: ${CONFIG.maxDownloadConcurrency}`);
     console.log(`   FFmpeg Threads:   ${CONFIG.maxFfmpegConcurrency}`);
-    
+
     console.log(`\n${C.Yellow}── Quality Configuration ──${C.Reset}`);
     console.log(`   Dynamic Quality:  ${CONFIG.dynamicQuality ? 'ON (Auto-detect from source)' : 'OFF (Fixed bitrate)'}`);
     console.log(`   Fallback Bitrate: ${CONFIG.fallbackBitrate}`);
-    
+
     if (CONFIG.dynamicQuality) {
         console.log(`\n${C.Gray}   Quality Tiers (based on YouTube Opus):${C.Reset}`);
         console.log(`${C.Gray}   ├─ Lossless (FLAC/WAV):   → ${tiers.lossless}`);
@@ -1058,10 +1058,10 @@ async function showSettingsMenu() {
         console.log(`   ├─ Low (≥96kbps):         → ${tiers.low}`);
         console.log(`   └─ Minimum (<96kbps):     → ${tiers.minimum}${C.Reset}`);
     }
-    
+
     console.log(`\n${C.Yellow}── File Management ──${C.Reset}`);
     console.log(`   Delete source after convert: ${CONFIG.deleteSourceAfterConvert ? 'YES' : 'NO'}`);
-    
+
     console.log(`\n${C.Cyan}── Options ──${C.Reset}`);
     console.log(`[1] Change Download Threads`);
     console.log(`[2] Change FFmpeg Threads`);
@@ -1069,10 +1069,10 @@ async function showSettingsMenu() {
     console.log(`[4] Change Fallback Bitrate`);
     console.log(`[5] Toggle Delete Source After Convert`);
     console.log(`[0] Back`);
-    
+
     const choice = await ask(`\n${C.Yellow}Pilihan: ${C.Reset}`);
-    
-    switch(choice.trim()) {
+
+    switch (choice.trim()) {
         case '1':
             const oldDT = CONFIG.maxDownloadConcurrency;
             const dt = await ask('Download threads (1-10): ');
@@ -1116,50 +1116,50 @@ async function showSettingsMenu() {
         default:
             Logger.warn("MENU", `Invalid settings option: ${choice}`);
     }
-    
+
     rl.close();
 }
 
 async function promptSourceDirectory() {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(r => rl.question(q, r));
-    
+
     console.log(`\n${C.Cyan}=== FFmpeg Source Conversion ===${C.Reset}`);
     console.log(`Supported formats: ${CONFIG.supportedSourceFormats.join(', ')}`);
     console.log(`\nEnter source directory path (or press Enter for default):`);
     console.log(`Default: ${CONFIG.outputDir}`);
-    
+
     const input = await ask(`${C.Yellow}Path: ${C.Reset}`);
     rl.close();
-    
+
     return input.trim() || CONFIG.outputDir;
 }
 
 // --- ARCHIVED FILES MANAGEMENT ---
 async function manageArchivedFiles(db) {
-    const archivedItems = Object.values(db).filter(i => 
+    const archivedItems = Object.values(db).filter(i =>
         (i.status === 'archived' || i.status === 'unavailable_archived') && i.local_filename
     );
-    
+
     if (archivedItems.length === 0) {
         return; // No archived files
     }
-    
+
     Logger.info("ARCHIVE", `Ditemukan ${archivedItems.length} file archived.`);
-    
+
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(r => rl.question(q, r));
-    
+
     console.log(`\n${C.Yellow}╔════════════════════════════════════════════════════╗`);
     console.log(`║           ARCHIVED FILES MANAGEMENT                ║`);
     console.log(`╚════════════════════════════════════════════════════╝${C.Reset}`);
-    
+
     console.log(`\n${C.Gray}Ditemukan ${archivedItems.length} file archived:${C.Reset}`);
-    
+
     // Group by status
     const archived = archivedItems.filter(i => i.status === 'archived');
     const unavailableArchived = archivedItems.filter(i => i.status === 'unavailable_archived');
-    
+
     if (archived.length > 0) {
         console.log(`\n${C.Cyan}[ARCHIVED] - User archived (${archived.length} files):${C.Reset}`);
         archived.slice(0, 10).forEach(item => {
@@ -1167,7 +1167,7 @@ async function manageArchivedFiles(db) {
         });
         if (archived.length > 10) console.log(`   ${C.Gray}... dan ${archived.length - 10} lainnya${C.Reset}`);
     }
-    
+
     if (unavailableArchived.length > 0) {
         console.log(`\n${C.Red}[UNAVAILABLE_ARCHIVED] - Video deleted/private (${unavailableArchived.length} files):${C.Reset}`);
         unavailableArchived.slice(0, 10).forEach(item => {
@@ -1175,7 +1175,7 @@ async function manageArchivedFiles(db) {
         });
         if (unavailableArchived.length > 10) console.log(`   ${C.Gray}... dan ${unavailableArchived.length - 10} lainnya${C.Reset}`);
     }
-    
+
     console.log(`\n${C.Yellow}Pilihan:${C.Reset}`);
     console.log(`[1] Keep semua archived files`);
     console.log(`[2] Delete SEMUA archived files`);
@@ -1184,17 +1184,17 @@ async function manageArchivedFiles(db) {
         console.log(`[4] Recheck unavailable_archived (cek apakah video sudah public lagi)`);
     }
     console.log(`[0] Skip (lanjut tanpa perubahan)`);
-    
+
     const choice = await ask(`\n${C.Yellow}Pilihan: ${C.Reset}`);
-    
+
     let deletedCount = 0;
-    
-    switch(choice.trim()) {
+
+    switch (choice.trim()) {
         case '1':
             Logger.info("ARCHIVE", "User memilih keep semua archived files.");
             console.log(`${C.Green}✓ Semua file archived tetap disimpan.${C.Reset}`);
             break;
-            
+
         case '2':
             Logger.info("ARCHIVE", "User memilih delete SEMUA archived files.");
             archivedItems.forEach(item => {
@@ -1204,7 +1204,7 @@ async function manageArchivedFiles(db) {
                         fs.unlinkSync(filePath);
                         Logger.file("ARCHIVE_DELETE", `Deleted: ${item.local_filename}`);
                         deletedCount++;
-                    } catch(e) {
+                    } catch (e) {
                         Logger.error("ARCHIVE_DELETE", `Gagal hapus: ${item.local_filename}`);
                     }
                 }
@@ -1214,7 +1214,7 @@ async function manageArchivedFiles(db) {
             console.log(`${C.Green}✓ ${deletedCount} file archived dihapus.${C.Reset}`);
             Logger.info("ARCHIVE", `${deletedCount} archived files telah dihapus.`);
             break;
-            
+
         case '3':
             Logger.info("ARCHIVE", "User memilih delete hanya unavailable_archived.");
             unavailableArchived.forEach(item => {
@@ -1224,7 +1224,7 @@ async function manageArchivedFiles(db) {
                         fs.unlinkSync(filePath);
                         Logger.file("ARCHIVE_DELETE", `Deleted unavailable: ${item.local_filename}`);
                         deletedCount++;
-                    } catch(e) {
+                    } catch (e) {
                         Logger.error("ARCHIVE_DELETE", `Gagal hapus: ${item.local_filename}`);
                     }
                 }
@@ -1234,23 +1234,23 @@ async function manageArchivedFiles(db) {
             console.log(`${C.Green}✓ ${deletedCount} unavailable_archived files dihapus.${C.Reset}`);
             Logger.info("ARCHIVE", `${deletedCount} unavailable_archived files telah dihapus.`);
             break;
-            
+
         case '4':
             if (unavailableArchived.length === 0) {
                 console.log(`${C.Gray}Tidak ada unavailable_archived untuk dicek.${C.Reset}`);
                 break;
             }
-            
+
             Logger.info("ARCHIVE", `Rechecking ${unavailableArchived.length} unavailable_archived videos...`);
             console.log(`\n${C.Cyan}Mengecek ${unavailableArchived.length} video...${C.Reset}`);
-            
+
             let reactivatedCount = 0;
             let stillUnavailableCount = 0;
-            
+
             for (const item of unavailableArchived) {
                 const displayTitle = item.title.length > 40 ? item.title.substring(0, 37) + '...' : item.title;
                 process.stdout.write(`   Checking: ${displayTitle}... `);
-                
+
                 try {
                     // Use yt-dlp to check if video is available
                     const result = await new Promise((resolve) => {
@@ -1260,21 +1260,21 @@ async function manageArchivedFiles(db) {
                             '--print', 'title',
                             `https://www.youtube.com/watch?v=${item.id}`
                         ], { shell: false, timeout: 15000 });
-                        
+
                         let output = '';
                         child.stdout.on('data', (data) => { output += data.toString(); });
                         child.on('close', (code) => {
                             resolve({ success: code === 0, title: output.trim() });
                         });
                         child.on('error', () => resolve({ success: false }));
-                        
+
                         // Timeout after 10 seconds
                         setTimeout(() => {
                             child.kill();
                             resolve({ success: false, timeout: true });
                         }, 10000);
                     });
-                    
+
                     if (result.success && result.title && result.title !== '[Deleted video]' && result.title !== '[Private video]') {
                         // Video is available again!
                         db[item.id].status = 'active';
@@ -1286,12 +1286,12 @@ async function manageArchivedFiles(db) {
                         console.log(`${C.Red}✗ masih unavailable${C.Reset}`);
                         stillUnavailableCount++;
                     }
-                } catch(e) {
+                } catch (e) {
                     console.log(`${C.Red}✗ error${C.Reset}`);
                     stillUnavailableCount++;
                 }
             }
-            
+
             if (reactivatedCount > 0) {
                 saveHarmony(db);
                 // Trigger download for reactivated videos
@@ -1299,34 +1299,34 @@ async function manageArchivedFiles(db) {
                 Logger.info("DOWN", "Starting download for reactivated videos...");
                 await startMultiThreadDownloadQueue(db);
             }
-            
+
             console.log(`\n${C.Cyan}Hasil recheck:${C.Reset}`);
             console.log(`   ${C.Green}✓ ${reactivatedCount} video kembali tersedia${C.Reset}`);
             console.log(`   ${C.Red}✗ ${stillUnavailableCount} video masih unavailable${C.Reset}`);
             Logger.info("ARCHIVE", `Recheck selesai: ${reactivatedCount} reactivated, ${stillUnavailableCount} still unavailable`);
             break;
-            
+
         case '0':
         default:
             Logger.info("ARCHIVE", "User skip archived files management.");
             console.log(`${C.Gray}Skipped. Tidak ada perubahan.${C.Reset}`);
     }
-    
+
     rl.close();
 }
 
 // --- MAIN INIT ---
 (async () => {
     Logger.init();
-    
+
     if (!fs.existsSync(CONFIG.outputDir)) fs.mkdirSync(CONFIG.outputDir, { recursive: true });
-    
+
     // Main menu loop - keeps running until user picks an action or exits
     let running = true;
     while (running) {
         const choice = await showInteractiveMenu();
-        
-        switch(choice) {
+
+        switch (choice) {
             case '1':
                 // Normal sync & download
                 Logger.info("MENU", "Selected: [1] Sync Playlist & Download");
@@ -1342,7 +1342,7 @@ async function manageArchivedFiles(db) {
                 // Check for archived files after completion
                 await manageArchivedFiles(db1);
                 break;
-                
+
             case '2':
                 // FFmpeg conversion only
                 Logger.info("MENU", "Selected: [2] FFmpeg Conversion Only");
@@ -1359,7 +1359,7 @@ async function manageArchivedFiles(db) {
                     running = false; // Exit after successful conversion
                 }
                 break;
-                
+
             case '3':
                 // Full sync + convert
                 Logger.info("MENU", "Selected: [3] Full Sync + Convert");
@@ -1379,7 +1379,7 @@ async function manageArchivedFiles(db) {
                 // Check for archived files after completion
                 await manageArchivedFiles(db3);
                 break;
-                
+
             case '4':
                 // Settings - stay in loop, show updated settings
                 Logger.info("MENU", "Selected: [4] Settings");
@@ -1391,17 +1391,17 @@ async function manageArchivedFiles(db) {
                 await new Promise(r => setTimeout(r, 1500)); // Brief pause to show changes
                 // Loop continues - will show menu again
                 break;
-                
+
             case '0':
                 Logger.info("MENU", "Selected: [0] Exit");
                 Logger.info("SYSTEM", "Exit requested by user.");
                 running = false;
                 process.exit(0);
                 break;
-                
+
             default:
                 Logger.warn("MENU", `Invalid menu option: "${choice}"`);
-                // Loop continues - will show menu again
+            // Loop continues - will show menu again
         }
     }
 
