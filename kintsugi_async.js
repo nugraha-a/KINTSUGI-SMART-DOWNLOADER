@@ -621,7 +621,7 @@ function runReindexing(db) {
         const prefix = String(item.playlist_index).padStart(3, '0');
         const cleanUploader = sanitizeFilename(item.uploader);
         const cleanTitle = sanitizeFilename(item.title);
-        const target = `${prefix} ${cleanUploader} - ${cleanTitle}.opus`;
+        const target = `${prefix} ${cleanTitle} - ${cleanUploader}.opus`;
         doRename(item, target);
     });
 
@@ -636,7 +636,7 @@ function runReindexing(db) {
         const cleanUploader = sanitizeFilename(item.uploader);
         const cleanTitle = sanitizeFilename(item.title);
         let tag = item.status === 'unavailable_archived' ? "[ARCHIVED] [DEL]" : "[ARCHIVED]";
-        const target = `${tag} ${cleanUploader} - ${cleanTitle}.opus`;
+        const target = `${tag} ${cleanTitle} - ${cleanUploader}.opus`;
         doRename(item, target);
     });
 
