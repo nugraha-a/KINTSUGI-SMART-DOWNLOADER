@@ -15,7 +15,7 @@ const os = require('os');
 
 // --- KONFIGURASI ---
 const CONFIG = {
-    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wvCVc_darF_W5_t0TnurwLr",
+    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wuGtrsqPbQjmvH4gaiNLp-_",
     outputDir: "C:\\Users\\it\\Music\\Playlists\\Kintsugi - Copy",
     ytDlpExe: "yt-dlp.exe",
     ffmpegExe: "ffmpeg.exe",   // FFmpeg executable path
@@ -500,7 +500,10 @@ function runHarmonizer(remoteEntries, db) {
                 Logger.info("STATUS", `Change [${entry.id}]: ${oldStatus} -> ${newStatus}`);
             }
 
-            db[entry.id] = { ...db[entry.id], ...entry, title: realTitle, playlist_index: targetIndex, status: newStatus, last_synced: new Date().toISOString() };
+            // Preserve local fields that should NOT be overwritten by remote entry
+            const preservedLocalFilename = db[entry.id].local_filename;
+            const preservedDownloadStatus = db[entry.id].download_status;
+            db[entry.id] = { ...db[entry.id], ...entry, title: realTitle, playlist_index: targetIndex, status: newStatus, local_filename: preservedLocalFilename, download_status: preservedDownloadStatus, last_synced: new Date().toISOString() };
             stats.update++;
         } else {
             db[entry.id] = { ...entry, playlist_index: targetIndex, local_filename: null, status: isDead ? 'unavailable_pending' : 'active', download_status: 'pending', last_synced: new Date().toISOString() };
@@ -896,8 +899,8 @@ async function downloadSingleVideo(item, db, workerId) {
 
                     if (code === 0) {
                         const mergeMatch = fullOutput.match(/Merging formats into "(.*?)"/);
-                        const destMatch = fullOutput.match(/Destination: (.*?)\s/);
-                        const alreadyMatch = fullOutput.match(/\[download\] (.*?) has already been downloaded/);
+                        const destMatch = fullOutput.match(/Destination: (.+?)\r?\n/);
+                        const alreadyMatch = fullOutput.match(/\[download\] (.+?) has already been downloaded/);
 
                         let detectedFile = null;
                         if (mergeMatch) detectedFile = mergeMatch[1];

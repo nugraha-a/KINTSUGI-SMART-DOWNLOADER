@@ -1,6 +1,6 @@
 /**
  * YouTube Playlist Clicker — Playwright Multi-Tab Edition
- * Adds videos from archive.txt to a YouTube playlist using parallel tabs.
+ * Adds videos from missing_online.txt to a YouTube playlist using parallel tabs.
  *
  * YouTube 2025+ DOM:
  *   Dialog:  tp-yt-iron-dropdown > yt-sheet-view-model
@@ -15,7 +15,7 @@ const path = require('path');
 const readline = require('readline');
 
 // ─── Configuration ───────────────────────────────────────────────
-const ARCHIVE_FILE = String.raw`c:\Users\it\Music\Playlists\Kintsugi\data\archive.txt`;
+const ARCHIVE_FILE = String.raw`c:\Users\it\Music\Playlists\Kintsugi\data\missing_online.txt`;
 const CHROME_PATH = String.raw`C:\Program Files\Google\Chrome Dev\Application\chrome.exe`;
 const PLAYLIST_NAME = 'New Playlist';  // Must match the playlist name in YouTube
 const AUTOMATION_PROFILE = path.join(__dirname, '.chrome-automation-profile');

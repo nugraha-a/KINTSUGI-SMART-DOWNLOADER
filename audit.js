@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ARCHIVE_FILE = String.raw`c:\Users\it\Music\Playlists\Kintsugi\data\archive.txt`;
-const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLP_tyyJ-U_wvCVc_darF_W5_t0TnurwLr';
+const PLAYLIST_URL = 'https://www.youtube.com/playlist?list=PLP_tyyJ-U_wuGtrsqPbQjmvH4gaiNLp-_';
 const YT_DLP = path.join(__dirname, 'yt-dlp.exe');
 
 function extractVideoId(url) {
