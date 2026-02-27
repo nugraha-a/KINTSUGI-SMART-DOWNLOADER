@@ -15,8 +15,8 @@ const os = require('os');
 
 // --- KONFIGURASI ---
 const CONFIG = {
-    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wsywuTz3UctQ8GqGkVTOxx8",
-    outputDir: "C:\\Users\\it\\Music\\Missing",
+    url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wvCVc_darF_W5_t0TnurwLr",
+    outputDir: "C:\\Users\\it\\Music\\Playlists\\Kintsugi - Copy",
     ytDlpExe: "yt-dlp.exe",
     ffmpegExe: "ffmpeg.exe",   // FFmpeg executable path
     ffprobeExe: "ffprobe.exe", // FFprobe for audio analysis

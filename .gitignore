@@ -1,3 +1,6 @@
 ffmpeg.exe
 ffplay.exe
 ffprobe.exe
+node_modules
+.chrome-automation-profile
+spotify_data
