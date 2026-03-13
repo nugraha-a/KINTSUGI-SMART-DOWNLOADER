@@ -16,7 +16,7 @@ const os = require('os');
 // --- KONFIGURASI ---
 const CONFIG = {
     url: "https://www.youtube.com/playlist?list=PLP_tyyJ-U_wuGtrsqPbQjmvH4gaiNLp-_",
-    outputDir: "C:\\Users\\it\\Music\\Playlists\\Kintsugi - Copy",
+    outputDir: "C:\\Users\\it\\Music\\Playlists\\Kintsugi",
     ytDlpExe: "yt-dlp.exe",
     ffmpegExe: "ffmpeg.exe",   // FFmpeg executable path
     ffprobeExe: "ffprobe.exe", // FFprobe for audio analysis
@@ -647,14 +647,81 @@ function runReindexing(db) {
 }
 
 // --- 7. SAFETY WHITELIST ---
-function runWhitelist(db) {
+function loadUserWhitelist() {
+    const whitelistPath = path.join(getDataDir(), 'user_whitelist.json');
+    try {
+        if (fs.existsSync(whitelistPath)) {
+            return new Set(JSON.parse(fs.readFileSync(whitelistPath, 'utf8')));
+        }
+    } catch (e) { }
+    return new Set();
+}
+
+function saveUserWhitelist(whitelistSet) {
+    const whitelistPath = path.join(getDataDir(), 'user_whitelist.json');
+    try {
+        fs.writeFileSync(whitelistPath, JSON.stringify([...whitelistSet], null, 2), 'utf8');
+    } catch (e) {
+        Logger.error("WHITELIST", `Gagal simpan user whitelist: ${e.message}`);
+    }
+}
+
+async function runWhitelist(db) {
     Logger.info("SECURITY", "Running Safety Whitelist Check...");
 
     // 1. Collect Valid Files from DB
     const validFiles = new Set();
     Object.values(db).forEach(i => { if (i.local_filename) validFiles.add(i.local_filename.toLowerCase()); });
 
-    // 2. System Whitelist (Always Safe)
+    // 2. Load user-kept whitelist (files user chose to keep before)
+    const userWhitelist = loadUserWhitelist();
+
+    // 2b. Show whitelist info if it has entries
+    if (userWhitelist.size > 0) {
+        // Filter: only show whitelist entries whose files still exist on disk
+        const existingWhitelisted = [...userWhitelist].filter(f =>
+            fs.existsSync(path.join(CONFIG.outputDir, f))
+        );
+
+        if (existingWhitelisted.length > 0) {
+            Logger.info("WHITELIST", `User whitelist: ${existingWhitelisted.length} file(s) di-keep sebelumnya.`);
+            console.log(`\n${C.Cyan}╔══════════════════════════════════════════════════════╗`);
+            console.log(`║  USER WHITELIST: ${String(existingWhitelisted.length).padStart(3)} file(s) di-keep               ║`);
+            console.log(`╚══════════════════════════════════════════════════════╝${C.Reset}`);
+            console.log(`  ${C.Green}[T]${C.Reset} Tampilkan list  |  ${C.Gray}[S]${C.Reset} Skip (lanjut)`);
+
+            const rlWl = readline.createInterface({ input: process.stdin, output: process.stdout });
+            const askWl = (q) => new Promise(r => rlWl.question(q, r));
+            const wlChoice = (await askWl(`  ${C.Yellow}Pilihan: ${C.Reset}`)).trim().toUpperCase();
+
+            if (wlChoice === 'T') {
+                console.log(`${C.Gray}──────────────────────────────────────────────────────${C.Reset}`);
+                existingWhitelisted.forEach((f, idx) => {
+                    const fullPath = path.join(CONFIG.outputDir, f);
+                    const fileSize = fs.existsSync(fullPath) ? fs.statSync(fullPath).size : 0;
+                    const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+                    console.log(`  ${C.Cyan}${String(idx + 1).padStart(3)}.${C.Reset} ${f}  ${C.Gray}(${sizeMB} MB)${C.Reset}`);
+                });
+                console.log(`${C.Gray}──────────────────────────────────────────────────────${C.Reset}`);
+                console.log(`  ${C.Red}[C]${C.Reset} Clear whitelist (semua di-scan ulang)  |  ${C.Green}[L]${C.Reset} Lanjut`);
+
+                const wlAction = (await askWl(`  ${C.Yellow}Pilihan: ${C.Reset}`)).trim().toUpperCase();
+                if (wlAction === 'C') {
+                    userWhitelist.clear();
+                    saveUserWhitelist(userWhitelist);
+                    Logger.warn("WHITELIST", "User whitelist di-clear. Semua file akan di-scan ulang.");
+                    console.log(`  ${C.Yellow}Whitelist di-clear! File akan muncul di orphan scan.${C.Reset}\n`);
+                }
+            }
+            rlWl.close();
+        } else {
+            // All whitelisted files are gone from disk, clean up the whitelist
+            userWhitelist.clear();
+            saveUserWhitelist(userWhitelist);
+        }
+    }
+
+    // 3. System Whitelist (Always Safe)
     const systemWhitelist = [
         CONFIG.dataDir.toLowerCase(),
         CONFIG.ytDlpExe.toLowerCase(),
@@ -665,6 +732,8 @@ function runWhitelist(db) {
         'node_modules', '.git', '.gitignore', '.env'
     ];
 
+    // 4. Scan and collect orphan files
+    const orphanFiles = [];
     const files = fs.readdirSync(CONFIG.outputDir);
     files.forEach(f => {
         const fullPath = path.join(CONFIG.outputDir, f);
@@ -674,29 +743,112 @@ function runWhitelist(db) {
         if (fs.lstatSync(fullPath).isDirectory()) return;
         if (systemWhitelist.some(sys => lowerName === sys || lowerName.endsWith('.js') || lowerName.endsWith('.json') || lowerName.endsWith('.log') || lowerName.endsWith('.bat'))) return;
 
-        // Strict Logic: Only delete if it LOOKS like a Kintsugi file [001 Artist - Title] (starts with 3 digits) AND is not in DB
-        // OR if it is a media file format we manage (.opus, .webm, .m4a)
         const isMediaFile = ['.opus', '.webm', '.m4a', '.mp3', '.flac', '.wav'].some(ext => lowerName.endsWith(ext));
-        const looksLikeKintsugi = /^\d{3}\s/.test(f); // Starts with "001 "
+        const looksLikeKintsugi = /^\d{3}\s/.test(f);
 
-        // IF it's in our Valid List, it's safe.
+        // IF it's in our Valid List or user whitelist, it's safe.
         if (validFiles.has(lowerName)) return;
+        if (userWhitelist.has(lowerName)) return;
 
-        // IF it is NOT valid, AND looks like our file, THEN it is an orphan/garbage.
+        // IF it is NOT valid, AND looks like our file, THEN it is an orphan.
         if (isMediaFile || looksLikeKintsugi) {
-            try {
-                // QUARANTINE / SAFETY DELETE
-                // For now, we delete, but because of loadDatabase check, we know DB is valid.
-                fs.unlinkSync(fullPath);
-                Logger.warn("SECURITY", `Menghapus file tidak dikenal (Orphan): ${f}`);
-            } catch (e) {
-                Logger.error("DELETE", `Gagal hapus ${f}: ${e.message}`);
-            }
-        } else {
-            // Unknown file that doesn't look like ours (e.g. "my_notes.txt") -> IGNORE IT
-            // Logger.file("IGNORE", `Ignoring alien file: ${f}`);
+            orphanFiles.push({ name: f, fullPath });
         }
     });
+
+    if (orphanFiles.length === 0) {
+        Logger.info("SECURITY", "Tidak ada file orphan ditemukan.");
+        return;
+    }
+
+    // 5. Prompt user for each orphan file
+    Logger.warn("SECURITY", `Ditemukan ${orphanFiles.length} file tidak dikenal (Orphan).`);
+    console.log(`\n${C.Yellow}╔══════════════════════════════════════════════════════╗`);
+    console.log(`║  ORPHAN FILES DETECTED: ${String(orphanFiles.length).padStart(3)} file(s)                  ║`);
+    console.log(`╚══════════════════════════════════════════════════════╝${C.Reset}\n`);
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const ask = (q) => new Promise(r => rl.question(q, r));
+
+    let deleteAll = false;
+    let keepAll = false;
+    let deletedCount = 0;
+    let keptCount = 0;
+
+    for (let i = 0; i < orphanFiles.length; i++) {
+        const orphan = orphanFiles[i];
+        const fileSize = fs.existsSync(orphan.fullPath) ? fs.statSync(orphan.fullPath).size : 0;
+        const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+
+        if (deleteAll) {
+            try {
+                fs.unlinkSync(orphan.fullPath);
+                deletedCount++;
+                Logger.warn("SECURITY", `[AUTO-DEL] ${orphan.name}`);
+            } catch (e) {
+                Logger.error("DELETE", `Gagal hapus ${orphan.name}: ${e.message}`);
+            }
+            continue;
+        }
+
+        if (keepAll) {
+            userWhitelist.add(orphan.name.toLowerCase());
+            keptCount++;
+            Logger.info("SECURITY", `[AUTO-KEEP] ${orphan.name}`);
+            continue;
+        }
+
+        console.log(`${C.Gray}──────────────────────────────────────────────────────${C.Reset}`);
+        console.log(`  ${C.Cyan}[${i + 1}/${orphanFiles.length}]${C.Reset} ${C.Yellow}${orphan.name}${C.Reset}`);
+        console.log(`  ${C.Gray}Size: ${sizeMB} MB${C.Reset}`);
+        console.log(`  ${C.Red}[D]${C.Reset} Hapus  |  ${C.Green}[K]${C.Reset} Keep  |  ${C.Red}[DA]${C.Reset} Hapus Semua  |  ${C.Green}[KA]${C.Reset} Keep Semua`);
+
+        const ans = (await ask(`  ${C.Yellow}Pilihan: ${C.Reset}`)).trim().toUpperCase();
+
+        switch (ans) {
+            case 'DA':
+                deleteAll = true;
+                try {
+                    fs.unlinkSync(orphan.fullPath);
+                    deletedCount++;
+                    Logger.warn("SECURITY", `[DEL] ${orphan.name}`);
+                } catch (e) {
+                    Logger.error("DELETE", `Gagal hapus ${orphan.name}: ${e.message}`);
+                }
+                break;
+            case 'KA':
+                keepAll = true;
+                userWhitelist.add(orphan.name.toLowerCase());
+                keptCount++;
+                Logger.info("SECURITY", `[KEEP] ${orphan.name}`);
+                break;
+            case 'D':
+                try {
+                    fs.unlinkSync(orphan.fullPath);
+                    deletedCount++;
+                    Logger.warn("SECURITY", `[DEL] ${orphan.name}`);
+                } catch (e) {
+                    Logger.error("DELETE", `Gagal hapus ${orphan.name}: ${e.message}`);
+                }
+                break;
+            case 'K':
+            default:
+                userWhitelist.add(orphan.name.toLowerCase());
+                keptCount++;
+                Logger.info("SECURITY", `[KEEP] ${orphan.name}`);
+                break;
+        }
+    }
+
+    rl.close();
+
+    // Save user whitelist
+    saveUserWhitelist(userWhitelist);
+
+    console.log(`${C.Gray}──────────────────────────────────────────────────────${C.Reset}`);
+    console.log(`  ${C.Green}Kept: ${keptCount}${C.Reset}  |  ${C.Red}Deleted: ${deletedCount}${C.Reset}`);
+    console.log(`${C.Gray}──────────────────────────────────────────────────────${C.Reset}\n`);
+    Logger.info("SECURITY", `Whitelist selesai: ${keptCount} kept, ${deletedCount} deleted.`);
 }
 
 // --- 8. MULTI-THREADED FFMPEG CONVERTER WITH DYNAMIC QUALITY ---
@@ -1340,7 +1492,7 @@ async function manageArchivedFiles(db) {
                 runHarmonizer(remoteEntries, db1);
                 await runDoubleAudit(db1);
                 runReindexing(db1);
-                runWhitelist(db1);
+                await runWhitelist(db1);
                 await startMultiThreadDownloadQueue(db1);
                 // Check for archived files after completion
                 await manageArchivedFiles(db1);
@@ -1373,7 +1525,7 @@ async function manageArchivedFiles(db) {
                 runHarmonizer(remote3, db3);
                 await runDoubleAudit(db3);
                 runReindexing(db3);
-                runWhitelist(db3);
+                await runWhitelist(db3);
                 await startMultiThreadDownloadQueue(db3);
                 // After downloads, check for any source files to convert
                 Logger.info("FFMPEG", "Starting FFmpeg Conversion Phase...");
